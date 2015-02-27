@@ -1,4 +1,4 @@
-CC = cc
+CC = /usr/bin/x86_64-w64-mingw32-gcc
 CFLAGS = -g -O2 -Wall -pedantic
 # CFLAGS = -O3
 SHAR = shar 
