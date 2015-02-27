@@ -31,7 +31,7 @@ from proxtheta.utility.server import is_request_to_this_server
 import urllib2
 
 from proxtheta.core import httpmes
-from proxtheta import utility
+from proxtheta import utility, core
 import proxtheta.server
 import proxtheta.utility.client
 import proxtheta.utility.server
@@ -1523,10 +1523,15 @@ def main(argv):
         _logging.root.setLevel(_logging.INFO)
 
     # todo!!!設定ファイルから読み込む
-    port = 8081
+    import config
+    port = config.listen_port
     recursive = True
     complete_cache = False
-    secondary_proxy_addr = None
+    if config.proxy_host:
+        secondary_proxy_addr = core.common.Address(
+            (config.proxy_host, config.proxy_port))
+    else:
+        secondary_proxy_addr = None
     nonproxy_camouflage = True
     logger.info("making video cache file path table")
 
