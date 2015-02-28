@@ -1192,9 +1192,13 @@ class NicoCachingReader(CachingReader):
             self._logger.info("suspended: " + self.videofilename)
 
     def __del__(self):
-        if not self._closed:
-            self._logger.error("not correctly closed: " + self.videofilename)
-            CachingReader.__del__(self)
+        try:
+            if not self._closed:
+                self._logger.error(
+                    "not correctly closed: " + self.videofilename)
+                CachingReader.__del__(self)
+        except Exception:
+            pass
 
 
 class Extension():
@@ -1533,10 +1537,15 @@ def main(argv):
     else:
         secondary_proxy_addr = None
     nonproxy_camouflage = True
+
+    cache_dir_path = "./cache"
+    if not os.path.isdir(cache_dir_path):
+        os.mkdir(cache_dir_path)
+
     logger.info("making video cache file path table")
 
     # ファクトリやらシングルトンやらの初期化
-    nicocache_filesystem = NicoCacheFileSystem("./cache", recursive)
+    nicocache_filesystem = NicoCacheFileSystem(cache_dir_path, recursive)
     video_cache_getter = VideoCacheGetter(nicocache_filesystem)
 
     logger.info("finish making video cache file path table")
