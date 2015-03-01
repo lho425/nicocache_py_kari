@@ -39,6 +39,7 @@ from proxtheta.utility.common import safe_close
 import time
 import importlib
 import pkgutil
+import locale
 logger = _logging.getLogger("nicocache.py")
 # logger.setLevel(_logging.DEBUG)
 logger.info("nicocache.py")
@@ -858,14 +859,24 @@ class ThumbInfo(object):
     class NotThumbInfoError(Exception):
         pass
 
-    def __init__(self, video_id):
-        thumbinfo_etree = getthumbinfo_etree(video_id)
+    def __init__(self, id):
+        """id はvideo_idかwatchページのurlのwatch/XXXXX のXXXXXの部分
+        常にXXXXX == video_idになるとは限らない(公式動画)
+        getthumbinfoはvideo_idでもwatchページの番号でも、どちらでも取れる"""
+        thumbinfo_etree = getthumbinfo_etree(id)
         try:
-            self.video_id = video_id
-            self.title = thumbinfo_etree.find(".//title").text.encode("UTF-8")
-            self.movie_type = thumbinfo_etree.find(".//movie_type").text
-            self.size_high = thumbinfo_etree.find(".//size_high").text
-            self.size_low = thumbinfo_etree.find(".//size_low").text
+            # dirtyhack!!! python3に移植するまではすべてbytes型で文字列をやり取りする
+            # unicodeをオブジェクトの外に出さない！
+            self.video_id = thumbinfo_etree.find(
+                ".//video_id").text.encode(locale.getpreferredencoding(), 'replace')
+            self.title = thumbinfo_etree.find(
+                ".//title").text.encode(locale.getpreferredencoding(), 'replace')
+            self.movie_type = thumbinfo_etree.find(
+                ".//movie_type").text.encode(locale.getpreferredencoding(), 'replace')
+            self.size_high = thumbinfo_etree.find(
+                ".//size_high").text.encode(locale.getpreferredencoding(), 'replace')
+            self.size_low = thumbinfo_etree.find(
+                ".//size_low").text.encode(locale.getpreferredencoding(), 'replace')
         except AttributeError:
             raise ThumbInfo.NotThumbInfoError(str(thumbinfo_etree))
 
@@ -1179,6 +1190,7 @@ class NicoCachingReader(CachingReader):
         # dirty!!! グローバル変数に依存
         # todo!!! キャッシュを開いたり閉じたりするロジック(つまりcreate_*関数とcloseメソッド)
         # をどっかに分離する
+        # 案の定ユニットテストが失敗する…
         self._video_cache = nicocache.video_cache_getter.get(
             self._video_cache.get_videoid(),
             self._video_cache.is_economy())
@@ -1481,7 +1493,7 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
     def serve(self, req, server_sockfile, info):
         """とりあえずsaveだけ"""
         m = self.macher.match(req.path)
-        video_id = m.group(1)
+        watch_id = m.group(1)
         command = m.group(2)
 
         if command != "save":
@@ -1490,15 +1502,17 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
         res = httpmes.HTTPResponse(
             ("HTTP/1.1", 200, "OK"))
 
-        video_cache = self.video_cache_getter.get(video_id, low=False)
+        video_cache = self.video_cache_getter.get(watch_id, low=False)
 
-        thumbinfo = ThumbInfo(video_id)
+        thumbinfo = ThumbInfo(watch_id)
         title = thumbinfo.title
         video_cache.set_title(title)
-        res.body = ("NicoCacheAPI command successed: %s %s %s" %
-                    (command, video_id,
+        res_body = ("NicoCacheAPI command successed: %s %s %s" %
+                    (command, watch_id,
                      video_cache.get_video_cache_filepath()))
-        logger.info(res.body)
+        logger.info(res_body)
+        res.body = res_body.decode(
+            locale.getpreferredencoding()).encode("utf-8")
         res.set_content_length()
 
         return ResponsePack(res, server_sockfile=server_sockfile)
@@ -1525,7 +1539,9 @@ def main(argv):
     else:
         _logging.basicConfig(format="%(message)s")
         _logging.root.setLevel(_logging.INFO)
-
+    logger.info(
+        "guessed system default encoding: %s", locale.getpreferredencoding())
+    logger.info(u"ニコキャッシュ.py(仮)")
     # todo!!!設定ファイルから読み込む
     import config
     port = config.listen_port
