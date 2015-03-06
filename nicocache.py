@@ -40,6 +40,7 @@ import time
 import importlib
 import pkgutil
 import locale
+import shutil
 logger = _logging.getLogger("nicocache.py")
 # logger.setLevel(_logging.DEBUG)
 logger.info("nicocache.py")
@@ -1542,6 +1543,10 @@ def main(argv):
     logger.info(
         "guessed system default encoding: %s", locale.getpreferredencoding())
     logger.info(u"ニコキャッシュ.py(仮)")
+
+    if not os.path.exists("./config.py"):
+        shutil.copyfile("./config.py.template", "./config.py")
+
     # todo!!!設定ファイルから読み込む
     import config
     port = config.listen_port
