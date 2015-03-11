@@ -284,14 +284,19 @@ class HTTPResponse(HTTPMessage):
         return int(self.headers.get("Content-Length", -1))
 
 
+CHUNKED = "chunked"
+
+UNKNOWN = "unknown"
+
+
 def get_transfer_length(mes, hint_req=None):
     # ja!!!
     """このメソッドは、http1.1に準拠するのではなく、サーバから送られてくるデータをなるべく忠実に転送することを目的とするために使う。
     長さがわかるときは数値が返り、
-    Transfer Encoding が chunked のときは 文字列"chunked"が返り、
+    Transfer Encoding が chunked のときは CHUNKEDが返り、
     EOFまで読み込む必要があるときは-1が返り、
-    不明なときは文字列"unknown"が返る。
-    "unknown"が返るときは完全にクライアントとサーバ達だけが長さを知っているものとする。
+    不明なときは UNKNOWN が返る。
+     UNKNOWN が返るときは完全にクライアントとサーバ達だけが長さを知っているものとする。
 
     hint_reqはmesがHTTP Responseの場合に参考にされる可能性がある
     これは、HEAD メソッドのリクエストに対するレスポンスボディーの長さは0であるというrfc2616の規定に対応するためである。
@@ -304,7 +309,7 @@ def get_transfer_length(mes, hint_req=None):
     if hasattr(mes, "method"):
         # request
         if mes.method == "CONNECT":
-            return "unknown"
+            return UNKNOWN
         else:
             return int(mes.headers.get("Content-Length", 0))
 
@@ -315,14 +320,15 @@ def get_transfer_length(mes, hint_req=None):
         elif mes.is_connection_close():
             return -1
         elif mes.is_chunked():
-            return "chunked"
+            return CHUNKED
+
         elif (hasattr(mes, "status_code") and
               ((100 <= mes.status_code <= 199) or
                (mes.status_code == 204) or
                (mes.status_code == 304))):
             return 0
         else:
-            return "unknown"
+            return UNKNOWN
 
 #!!!後で実装or破棄
 # def load_body(mes, body_file, wfile=None):

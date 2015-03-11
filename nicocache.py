@@ -14,6 +14,9 @@
 #
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import absolute_import
+from libnicocache import VideoCacheInfo, VideoCache
+
 
 import os
 import logging as _logging
@@ -28,8 +31,6 @@ from proxtheta.utility.server import is_request_to_this_server
 #_logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s: %(message)s")
 
 
-import urllib2
-
 from proxtheta.core import httpmes
 from proxtheta import utility, core
 import proxtheta.server
@@ -41,6 +42,10 @@ import importlib
 import pkgutil
 import locale
 import shutil
+import libnicocache
+from libnicocache.filecachetool import CachingReader
+from libnicocache.utility import get_partial_http_resource
+from libnicovideo import ThumbInfo
 logger = _logging.getLogger("nicocache.py")
 # logger.setLevel(_logging.DEBUG)
 logger.info("nicocache.py")
@@ -48,97 +53,64 @@ logger.info("nicocache.py")
 # proxtheta.utility.client.logger.setLevel(_logging.DEBUG)
 # proxtheta.logger.setLevel(_logging.DEBUG)
 
-if 0:
-    """Type Define"""
-    logger = _logging.Logger()
+# if 0:
+#     """Type Define"""
+#     logger = _logging.Logger()
 
 
-def getthumbinfo(video_id):
-    """
-    http://ext.nicovideo.jp/api/getthumbinfo api wrapper
-    returns xml (str)
-    """
-    return urllib2.urlopen(
-        "http://ext.nicovideo.jp/api/getthumbinfo/" + video_id).read()
+def parse_nicovideo_request_query(query):
+    """ニコニコ動画の動画サーバへのリクエストのクエリから、
+    (query_name, video_num)を抽出して返す
+    例)
+    url: http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688low
+    query: m=24992647.47688low
+    (query_name, video_num, is_low) = ("m", "24992647", True)"""
 
-
-def getthumbinfo_etree(video_id):
-    return ElementTree.fromstring(getthumbinfo(video_id))
-
-
-def get_file_len(afile):
-    """afile is fileobj, not path str"""
-    orig_file_pointer = afile.tell()
-    afile.seek(0, 2)
-    length = afile.tell()
-    afile.seek(orig_file_pointer, 0)
-    return length
-
-
-# os.walkはとても遅い
-# C言語で実装された速いwalkの実装があるかもしれない
-# どのwalkの実装を使うかを後からプラグイン等で変えられるように外に出しておく
-walk = os.walk
-
-
-def get_pathlist(dirpath, recursive=False):
-    """pathlistとは [(dirpath, dirlist, filelist),...]である
-    dirlistはdirpath直下にあるディレクトリのリストで、filelistはdirpath直下にあるファイルのリストである"""
-    if recursive:
-        return list(walk(dirpath, followlinks=True))
-    else:
-        for lst in walk(dirpath, followlinks=True):
-            return [lst]
-
-
-def get_dirpathlist(dirpath, recursive=True):
-    """recursive == True の場合dirpathを再帰的に検索し
-    [dirpath, subdirpath1, subdirpath2 ...]
-    なるリストを返す
-    recursive == Falseなら
-    [dirpath]
-    を返す"""
-
-    if not recursive:
-        return [dirpath]
-
-    pathlist = get_pathlist(dirpath, recursive=True)
-    return get_dirpathlist_from_pathlist(pathlist)
-
-
-def get_dirpathlist_from_pathlist(pathlist):
-    dirpathlist = []
-
-    # tplは(dirpath, dirlist, filelist)なるタプル
-    for tpl in pathlist:
-        dirpathlist.append(tpl[0])
-
-    return dirpathlist
-
-
-def get_videonum_with_httpreq(req):
     try:
-        _, query_value = req.query.split('=')
+        query_name, query_value = query.split('=')
         video_num = query_value.split('.')[0]
     except ValueError:
         raise RuntimeError(
-            "get_videonum_with_httpreq(): error. query: " + req.query)
-    return video_num
+            "get_videoid_with_httpreq(): error. query: " + query)
+
+    return (query_name, video_num, query.endswith("low"))
 
 
-def get_videoid_with_httpreq(video_type_cacher, req):
+def get_videotype_videonum_islow__with_req(req, video_type_cacher):
+    query_name, video_num, is_low = parse_nicovideo_request_query(req.query)
+
+    video_type = None
+    if video_type_cacher is not None:
+        video_type = video_type_cacher.get_videotype(video_num)
+
+    if video_type is None:
+        video_type = guess_video_type_by_query_name(query_name)
+
+    return video_type, video_num, is_low
+
+
+def get_videonum_with_httpreq(req):
+
+    return parse_nicovideo_request_query(req.query)[1]
+
+
+def guess_video_type_by_query_name(query_name):
+    if query_name == "s":
+        video_type = "nm"
+    else:
+        video_type = "sm"
+
+    return video_type
+
+
+def ___get_videoid_with_httpreq(video_type_cacher, req):
     """httpリクエストをヒントにしてvideo idを得る
     video_type_cacherから得られなかった時は推論も行う
     video_type_cacher = None のときは推論のみ行う"""
     # url: http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688low
     # query: m=24992647.47688low
 
-    try:
-        query_name, query_value = req.query.split('=')
-        video_num = query_value.split('.')[0]
-    except ValueError:
-        raise RuntimeError(
-            "get_videoid_with_httpreq(): error. query: " + req.query)
+    query_name, video_num, _ = parse_nicovideo_request_query(req.query)
 
     video_type = None
     if video_type_cacher is not None:
@@ -153,87 +125,11 @@ def get_videoid_with_httpreq(video_type_cacher, req):
     return video_type + video_num
 
 
-def make_video_cache_prefix(video_id, tmp=False, low=False):
-    # video_cache_prefixは tmp_sm12345low みたいなの
-    # tmp_sm12345low.mp4だったり、tmp_sm12345low_タイトル.mp4だったりするので、最後にアンダーバーは入れない
-    video_cache_prefix = video_id
-    if tmp:
-        video_cache_prefix = "tmp_" + video_cache_prefix
-    if low:
-        video_cache_prefix = video_cache_prefix + "low"
-
-    return video_cache_prefix
-
-
-def make_video_cache_filename(
-        video_id, filename_extension, tmp=False, low=False, title=""):
-    """tmp_sm12345low.mp4とかtmp_sm12345low_タイトル.mp4みたいなのを返す
-    titleがNoneか""ならtmp_sm12345low.mp4みたいなのを返す
-    filename_extensionは'.'で始まらない'mp4'とか'swf'とかの文字列"""
-    video_cache_prefix = make_video_cache_prefix(video_id, tmp, low)
-    if (title is None) or (title == ""):
-        return ''.join((video_cache_prefix, '.', filename_extension))
-    else:
-        return ''.join(
-            (video_cache_prefix, '_', title, '.', filename_extension))
-
-
-def parse_video_cache_filename(cachefilename):
-    """return (video_type, video_num, title, 
-    filename_extension, is_tmp, is_low)"""
-    tmp = False
-    low = False
-    title = ""
-    m = re.match(
-        "(tmp_)?(\w\w)([0-9]+)(low)?(_.*)?[.]([^.]*)", cachefilename)
-
-    if not m:
-        return None
-
-    if m.group(1):
-        tmp = True
-
-    video_type = m.group(2)
-    video_num = m.group(3)
-
-    if m.group(4):
-        low = True
-    if m.group(5):
-        title = m.group(5)[1:]  # _(アンダーバー)もタイトルにマッチしてしまうので[1:]とする
-    filename_extension = m.group(6)
-
-    return (video_type, video_num, title, filename_extension, tmp, low)
-
-
-def get_video_cache_filepath(
-        video_id, pathlist, tmp=False, low=False, recursive=True):
-    """video_idはsmとかsoで始まるstr
-    filename_extensionは'flv'や'mp4'('.'を含めてはいけない)"""
-
-    video_cache_prefix = make_video_cache_prefix(video_id, tmp, low)
-
-    if not recursive:
-        pathlist = (pathlist[0],)
-
-    for (dirpath, _, filenames) in pathlist:
-        for filename in filenames:
-            filepath = os.path.join(dirpath, filename)
-
-            # video_cache_prefixにはアンダーバーを含んでいないので注意
-            if (filename.startswith(''.join((video_cache_prefix, "_"))) or
-                    filename.startswith(''.join((video_cache_prefix, ".")))):
-                logger.debug(filepath + ": matched!")
-                return filepath
-            else:
-                logger.debug(filepath + ": not matched.")
-
-    return None
-
-
 mimetypes.add_type("video/flv", ".flv")  # ここに書くのはなぁ
 
 
 def guess_mimetype(path):
+    """不明だった場合Noneを返す"""
     return mimetypes.guess_type(path)[0]
 
 
@@ -251,967 +147,362 @@ def guess_filename_extension(mimetype):
     return
 
 
-class CachingReader(object):
+class VideoCacheManager(object):
 
-    def __init__(self, cachefile, originalfile, length,
-                 complete_cache=False, logger=logger):
-        """
-        cachefile must be opened read/write able mode.
-        if complete_cache: when cacheio.close(), complete cache.
-        """
-        self._cachefile = cachefile
-        self._originalfile = originalfile
-        self._complete_cache = complete_cache
+    """NicoCacheのプロセスが起動中、
+    一つのvideo_num(video_cache_info)に対応するVideoCacheオブジェクトは
+    プロセス内に1つしか存在しないことを保証する"""
 
-        self._logger = logger
-
-        self._read_from_cachefile = True
-        self._length = length
-        self._left_size = length
-        self._closed = False
-
-    def read(self, size=-1):
-        # jp!!!返るデータの大きさがsizeであることは(もしくはEOFまで読み込んでいることは)下位のread()関数が保証している(多分)
-        if self._left_size == 0:
-            self._logger.debug("CachingReader.read(): left size is 0. EOF")
-            return ""
-
-        if size < 0:
-            self._logger.debug("CachingReader.read(): read all.")
-            return self.read(self._left_size)
-
-        else:
-            self._logger.debug(
-                "CachingReader.read(): start read(). left size is %d byte", self._left_size)
-            self._logger.debug(
-                "CachingReader.read(): requested size to read is %d byte", size)
-            data = ''
-
-            if self._read_from_cachefile:
-                data_from_cache = self._cachefile.read(size)
-                # jp!!!"このメソッドは、 size バイトに可能な限り近くデータを取得するために、背後の C 関数 fread() を 1 度以上呼び出すかもしれないので注意してください。"
-                # とライブラリリファレンスにあるので、len(data_from_cache) == sizeは保証されている
-                self._logger.debug(
-                    "CachingReader.read(): read %d byte from cache file", len(data_from_cache))
-                data = data_from_cache
-
-                if len(data_from_cache) < size:
-                    # jp!!!キャッシュのデータでは足りないので、残りは下でオリジナルから読み出す
-                    self._read_from_cachefile = False
-                    size -= len(data_from_cache)
-
-            if not self._read_from_cachefile:
-                data_from_orig = self._originalfile.read(size)
-                self._logger.debug(
-                    "CachingReader.read(): read %d byte from original file", len(data_from_orig))
-                self._cachefile.write(data_from_orig)
-                self._logger.debug(
-                    "CachingReader.read(): write %d byte to cache file", len(data_from_orig))
-
-                if len(data) > 0:
-                    # jp!!!すでにcachefileから読まれたデータがあるとき
-                    data = ''.join((data, data_from_orig))
-                else:
-                    data = data_from_orig
-
-            self._left_size -= len(data)
-            self._logger.debug("CachingReader.read(): read %d byte", len(data))
-            self._logger.debug(
-                "CachingReader.read(): end read(). left size is %d byte", self._left_size)
-            return data
-
-    @property
-    def closed(self):
-        return self._closed
-
-    def close(self):
-        if self._complete_cache:
-            self._logger.debug(
-                "CachingReader.close(): start completing cache. left size is %d byte. seek to end of cache file", self._left_size)
-            self._cachefile.seek(0, 2)
-            self._left_size = self._length - self._cachefile.tell()
-            self._read_from_cachefile = False
-            self._logger.debug(
-                "CachingReader.close(): left size is %d byte (only original file). start appending to cache file", self._left_size)
-
-            # read(self._left_size) is not good when self._left_size is too
-            # large
-            while True:
-                data = self.read(8192)
-                if len(data) < 8192:
-                    break
-            self._logger.debug(
-                "CachingReader.close(): left size is %d byte. end completing cache.", self._left_size)
-        self._cachefile.close()
-        self._originalfile.close()  # fixme!!!例外安全じゃない
-        self._cachefile = None
-        self._originalfile = None
-        self._closed = True
-
-    def __del__(self):
-        if not self._closed:
-            try:
-                self._logger.error(
-                    "CachingReader was closed by GC! Resource leaking!")
-                self._logger.error(object.__repr__(self))
-            except:
-                pass
-
-            try:
-                self.close()
-            except:
-                pass
-
-
-# def find_cachefile(video_id):
-    # jp!!!
-    # ローカルのcacheフォルダを再帰的に検査して、キャッシュファイルが見つかればそれの相対パスを返す
-
-# キャッシュファイル検索とキャッシュをブラウザに送る流れ(再帰検索しない)
-# video_num(smとかsoとか含まない)が与えられる
-#pathes = glob.glob("./cache/??" + video_num + "[!0-9]*")
-
-
-#??video_numにマッチするファイルのリストを得る(lowでない)
-# ローカルに完全な非エコノミーキャッシュファイルがあるなら:
-#    openして返す
-# else(非エコノミーキャッシュファイルが中途半端なキャッシュなら、もしくはキャッシュがないなら):
-#    キャッシュの続きが非エコノミーでとれるなら:
-#        NicoCachingReaderを提供
-#    エコノミー動画しかとれないなら:
-#        ローカルに完全なエコノミーキャッシュファイルがあるなら:
-#            openして返す
-#        中途半端なキャッシュしかない、もしくはキャッシュがないなら:
-#                NicoCachingReaderを提供
-#
-
-
-# 複数キャッシュファイルがあったら:
-# warningだして最初のやつを使う
-
-# 動画タイトルが変更されていた場合:
-#    動画タイトル変更に対応するオプションがTrueなら:
-#        ローカルキャッシュのタイトルも変更
-
-# sm123456.mp4みたいに、タイトルがふくまれないものがあったら:
-#    動画タイトル変更に対応するオプションがTrueなら:
-#        現在のタイトルを取得、して設定
-
-# NicoCachingReaderでキャッシュ完了したら:
-#    tmp_...を...にリネームする
-
-
-class CacheFilePathListTable(object):
-
-    """いちいちファイル一覧を取得していると遅い人のためにキャッシュ可能のインターフェースを作る
-    スレッドセーフ"""
-    # todo!!! スレッドセーフ
-
-    def __init__(self, cachedirpath, recursive=False):
-        self._cachedirpath = cachedirpath
-        self._pathlist = get_pathlist(cachedirpath, recursive)
-
-    @property
-    def dirpath(self):
-        return self._cachedirpath
-
-    def get_video_cache_filepath(self, video_id,
-                                 tmp=False, low=False,
-                                 recursive=True):
-        return get_video_cache_filepath(
-            video_id, self._pathlist, tmp, low, recursive)
-
-    def get_dirpathlist(self):
-        return get_dirpathlist_from_pathlist(self._pathlist)
-
-    def insert(self, video_id, filename_extension,
-               tmp=False, low=False, title=""):
-        """tableの更新
-        追加するのは一番上の 階層に、なので注意"""
-        if self.get_video_cache_filepath(video_id,
-                                         tmp, low,
-                                         recursive=False) is not None:
-            # すでにトップ階層に存在している場合
-            return
-
-        self._pathlist[0][2].insert(0,
-                                    make_video_cache_filename(video_id,
-                                                              filename_extension,
-                                                              tmp, low,
-                                                              title))
-
-    def remove(self, video_id, tmp=False, low=False,
-               ignore_value_error=True):
-        """ignore_value_error=Falseのとき、該当する項目がなければエラーとなります。
-        再帰的に検索して削除するわけじゃないから注意"""
-        filepath = self.get_video_cache_filepath(
-            video_id, tmp, low, recursive=False)
-        if filepath is None:
-            filename = make_video_cache_filename(
-                video_id, "???", tmp, low, "")
-            raise ValueError(filename + " not in list")
-
-        filename = os.path.basename(filepath)
-        self._pathlist[0][2].remove(filename)
-
-
-class NicoCacheFileSystem:
-
-    """ファイルシステムとPathListTableの簡易的ラッパー
-    nicocache.pyに必要な機能しかない
-    ファイル名のリストをキャッシュしつつ実際のファイルシステムと同期する
-    スレッドセーフ(PathListTableがスレッドセーフだから)"""
-
-    class AlreadyExistsError(Exception):
-
-        def __init__(self, mes):
-            Exception.__init__(self, mes)
-
-    class NoSuchCacheFileError(Exception):
-
-        def __init__(self, mes):
-            Exception.__init__(self, mes)
-
-    def __init__(self, cachedirpath, recursive=True):
-
-        self._pathlisttable = CacheFilePathListTable(cachedirpath, recursive)
-
-    @property
-    def cachedirpath(self):
-        return self._pathlisttable.dirpath
-
-    def create_new_file(
-            self, video_id, filename_extension, tmp=False, low=False, title=""):
-        """トップの階層にファイルを作る
-        既に存在していたら例外投げる"""
-        fpath = self.get_video_cache_filepath(video_id, tmp, low)
-        if fpath is not None:
-            raise self.AlreadyExistsError(fpath)
-
-        filename = make_video_cache_filename(
-            video_id, filename_extension, tmp, low, title)
-        fpath = os.path.join(self.cachedirpath, filename)
-        if os.path.exists(fpath):
-            raise self.AlreadyExistsError(fpath)
-
-        with open(fpath, "wb"):
-            pass
-
-        self._pathlisttable.insert(
-            video_id, filename_extension, tmp, low, title)
-
-    def get_video_cache_filepath(self, video_id,
-                                 tmp=False, low=False):
-        filepath = self._pathlisttable.get_video_cache_filepath(
-            video_id, tmp, low)
-
-        if (filepath is not None) and (not os.path.exists(filepath)):
-            self._pathlisttable.remove(
-                video_id, tmp, low, ignore_value_error=False)
-            filepath = None
-
-        return filepath
-
-    def rename(self, video_id, tmp, low,
-               new_tmp=None, new_low=None, new_title=None):
-        """トップの階層のファイルのリネーム
-        最初の３つの引数はキャッシュファイルの特定に必要
-        変更の必要のない項目はNoneを代入してください.
-        変更対象のキャッシュファイルが存在しない場合エラー"""
-
-        oldfilepath = self.get_video_cache_filepath(video_id, tmp, low)
-        if oldfilepath is None:
-            # 変更対象のキャッシュファイルが存在しない場合エラー
-            raise self.NoSuchCacheFileError("video_id: " + video_id + ", " +
-                                            "tmp: " + str(tmp) + ", " +
-                                            "low: " + str(low))
-
-        oldfilename = os.path.basename(oldfilepath)
-        _, _, title, filename_extension, _, _ = parse_video_cache_filename(
-            oldfilename)
-
-        # テーブルの更新その1
-        self._pathlisttable.remove(
-            video_id, tmp, low, ignore_value_error=False)
-
-        if new_tmp is None:
-            new_tmp = tmp
-        if new_low is None:
-            new_low = low
-        if new_title is None:
-            new_title = title
-
-        newfilename = make_video_cache_filename(video_id,
-                                                filename_extension,
-                                                new_tmp, new_low,
-                                                new_title)
-        newfilepath = os.path.join(self.cachedirpath, newfilename)
-
-        # ファイルシステム上の更新
-        try:
-            os.rename(oldfilepath, newfilepath)
-        except Exception:
-            # トランザクション
-            self._pathlisttable.insert(
-                video_id, filename_extension, tmp, low, title)
-            logger.warning(
-                "NicoCacheFileSystem.rename(): os.rename failed. So NicoCacheFileSystem.rename() stopped.")
-            raise
-
-        # テーブルの更新その2
-        self._pathlisttable.insert(video_id,
-                                   filename_extension,
-                                   new_tmp, new_low,
-                                   new_title)
-
-    def search_cache_file(
-            self, video_id, filename_extension, tmp=False, low=False, title=""):
-        """
-        実際のファイルシステムについて、キャッシュルートディレクトリとサブディレクトリにキャッシュがあるか順に調べる
-        時間がかかる
-        必ずget_video_cache_filepath()で見つからなかった場合にのみ呼び出すこと
-        さもなければ例外を投げる
-        """
-        if self.get_video_cache_filepath(video_id, tmp, low) is not None:
-            raise RuntimeError(
-                "NicoCacheFileSystem: search_cache_file() called but get_video_cache_filepath() is not None!")
-
-        filename = make_video_cache_filename(
-            video_id, filename_extension, tmp, low, title)
-        dirpathlist = self._pathlisttable.get_dirpathlist()
-        for dirpath in dirpathlist:
-            filepath = os.path.join(dirpath, filename)
-            if os.path.isfile(filepath):
-                self._pathlisttable.insert(
-                    video_id, filename_extension, tmp, low, title)
-                return True
-
-        return False
-
-
-class NicoVideoTypeTable:
-
-    """動画ファイルのURL(http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688lowとか)
-    にはsmとかnmとかsoとか含まれない
-    なのでhttp://www.nicovideo.jp/watch/sm12345みたいなアクセスがあったときに、
-    番号と動画タイプの組をキャッシュしておく用のクラス"""
-    # todo!!! スレッドセーフ"
-
-    def __init__(self):
-        self._entry_table = {}
-
-    def add_videoid(self, video_id):
-        """video_idはsm12345とかnm67890みたいなの"""
-        self.add_videotype_and_videonum(video_id[0:2], video_id[2:])
-
-    def add_videotype_and_videonum(self, video_type, video_num):
-        self._entry_table[video_num] = video_type
-
-    def get_videotype(self, video_num):
-        if video_num in self._entry_table:
-            return self._entry_table[video_num]
-        return None
-
-
-class VideoCache:
-
-    """このクラスで保管する属性データはファイルシステム上のファイル名と、テーブル上のデータと同期しなければならない
-    クラス上のメンバ変数に属性データを保存し、変更するときはファイルシステムとテーブルの両方に変更を反映させることにする
-    だけど、将来的にpathlisttableがファイルシステム監視できるようになったらどうすんの？
-    Answer: ファイルシステム監視の結果がVideoCacheオブジェクトに同期されるのは、VideoCacheオブジェクトが作られるまで、とすればOK"""
-
-    @staticmethod
-    def get(nicocache_filesystem, video_id, low=False):
-        return VideoCache(nicocache_filesystem, video_id, low)
-
-    @staticmethod
-    def fetch(nicocache_filesystem, video_id, low=False):
-        """テーブルに存在するキャッシュのpathからVideoCacheを構成する
-        テーブル上にvideo_idのキャッシュのpathが無かったらNoneを返す"""
-
-        video_cache = VideoCache(nicocache_filesystem, video_id, low)
-        if not video_cache.exsists_in_filesystem():
-            return None
-
-        return video_cache
-
-    @staticmethod
-    def create(nicocache_filesystem, video_id,
-               filename_extension, low=False, title=""):
-        """テーブル上に新しくキャッシュpathを作った上でVideoCacheを構成する
-        既にテーブル上にvideo_idのキャッシュpathが存在する場合、例外を投げるのめんどくさいのでNoneを返す"""
-
-        video_cache = VideoCache(nicocache_filesystem, video_id, low)
-        if video_cache.exsists_in_filesystem():
-            return None
-
-        video_cache.set_title(title)
-        video_cache.set_filename_extension(filename_extension)
-
-        return video_cache
-
-    def __init__(self, nicocache_filesystem, video_id, low):
-        if 0:
-            """Arg Type"""
-            nicocache_filesystem = NicoCacheFileSystem()
-
-        # 大事なオブジェクト　このクラスの肝
-        self._nicocache_filesystem = nicocache_filesystem
-
-        # パラメタ
-        self._video_id = video_id
-        self._is_low = low
-
-        # 下の方で初期化されてほしい子たち
-        # 紛らわしいのでメンバ変数の定義は一ヶ所にまとめておく
-        self._title = str()
-        self._filename_extension = str()
-        self._exsists_in_filesystem = bool()
-        self._is_tmp = bool()
-
-        #### 初期化処理 ####
-        for tmp in (False, True):
-            cachefilepath = self._nicocache_filesystem.get_video_cache_filepath(self._video_id,
-                                                                                tmp, low)
-            if cachefilepath is not None:
-                self._exsists_in_filesystem = True
-                self._is_tmp = tmp
-
-                _, _, title, filename_extension, _, _ = parse_video_cache_filename(
-                    os.path.basename(cachefilepath))
-                self._title = title
-                self._filename_extension = filename_extension
-                return
-
-        # キャッシュがファイルシステム無かった場合ここへくる
-        self._title = ""
-        self._filename_extension = "unknown"
-        self._exsists_in_filesystem = False
-        self._is_tmp = True
-        return
-
-    def get_title(self):
-        return self._title
-
-    def get_videoid(self):
-        """video id はsm123とかnm123とかso123とか"""
-        return self._video_id
-
-    def get_videonum(self):
-        """video number (str type) はvideo idから先頭のsmとかnmとかsoとかと取り除いたもの、1234みたいなただの数値の文字列"""
-        return self._video_id[2:]
-
-    def get_videotype(self):
-        """video typeはsmとかnmとかsoとかのこと"""
-        return self._video_id[:2]
-
-    def exsists_in_filesystem(self):
-        """実際のファイルシステム上に存在するならTrue, ないならFalse"""
-        return self._exsists_in_filesystem
-
-    def is_economy(self):
-        return self._is_low
-
-    def is_not_economy(self):
-        return (not self.is_economy())
-
-    def is_tmp(self):
-        return self._is_tmp
-
-    def is_complete(self):
-        return (not self._is_tmp)
-
-    def set_title(self, title):
-        if not self.exists_in_root_cachedir():
-            raise NotImplementedError(
-                "rename title of cache file in sub directory is not allowed!")
-
-        if self._title == title:
-            return
-
-        if self._exsists_in_filesystem:
-            self._ncfs__rename(new_title=title)
-
-        self._title = title
-
-    def set_filename_extension(self, filename_extension):
-        if self._exsists_in_filesystem:
-            raise NotImplementedError(
-                "rename filename_extension of complete cache file is not allowed!")
-
-        self._filename_extension = filename_extension
-
-    def get_cachefilelen(self):
-        if not self._exsists_in_filesystem:
-            return 0
-
-        return os.path.getsize(self.get_video_cache_filepath())
-
-    def get_cachefilename(self):
-        return make_video_cache_filename(self._video_id,
-                                         self._filename_extension,
-                                         self._is_tmp, self._is_low,
-                                         self._title)
-
-    def get_video_cache_filepath(self):
-        return self._ncfs__get_video_cache_filepath()
-
-    def get_cachefile(self):
-        if not self._exsists_in_filesystem:
-            self._ncfs__create_new_file()
-            self._exsists_in_filesystem = True
-
-        cachefilepath = self._ncfs__get_video_cache_filepath()
-
-        if self._is_tmp:
-            return open(cachefilepath, "r+b")
-        else:
-            return open(cachefilepath, "rb")
-
-    def change_to_complete_cache(self):
-        """ファイルシステム上のキャッシュファイルのファイル名から"tmp_"を取り除く
-        NOTICE: get_cachefile()で作ったファイルのclose()は一切行われない。"""
-        self._ncfs__rename(
-            new_tmp=False, new_low=None, new_title=self._title)
-        self._is_tmp = False
-
-    def exists_in_root_cachedir(self):
-        """サブディレクトリにあるならFalse"""
-        if not self._exsists_in_filesystem:
-            # 新規にキャッシュファイルがつくられる場合、必ずrootのキャッシュdir直下にできる、この場合は作成が遅延されている
-            return True
-
-        cachedirname = os.path.dirname(self._ncfs__get_video_cache_filepath())
-
-        return cachedirname == self._nicocache_filesystem.cachedirpath
-
-    def _ncfs__rename(self, new_tmp=None, new_low=None, new_title=None):
-        self._nicocache_filesystem.rename(self._video_id, self._is_tmp, self._is_low,
-                                          new_tmp, new_low, new_title)
-
-    def _ncfs__get_video_cache_filepath(self):
-        return self._nicocache_filesystem.get_video_cache_filepath(self._video_id,
-                                                                   self._is_tmp, self._is_low)
-
-    def _ncfs__create_new_file(self):
-        self._nicocache_filesystem.create_new_file(self._video_id,
-                                                   self._filename_extension,
-                                                   self._is_tmp, self._is_low,
-                                                   self._title)
-
-
-class VideoCacheGetter:
-
-    def __init__(self, nicocache_filesystem, VideoCacheClass=VideoCache):
-
-        if 0:
-            """member type"""
-            self._VideoCacheClass = VideoCache
-
-        self._nicocache_filesystem = nicocache_filesystem
+    def __init__(self, FileSystemWrapperClass, VideoCacheClass=VideoCache):
+        self._filesystem_wrapper = FileSystemWrapperClass()
         self._VideoCacheClass = VideoCacheClass
 
-    def get(self, video_id, low):
-        return self._VideoCacheClass.get(
-            self._nicocache_filesystem, video_id, low)
+    def get(self, rootdir, video_num, **kwargs):
+        cache_list = self.get_cache_list(rootdir, video_num, **kwargs)
 
-    def fetch(self, video_id, low):
-        return self._VideoCacheClass.fetch(
-            self._nicocache_filesystem, video_id, low)
+        if not cache_list:
+            return None
 
-    def create(self, video_id, filename_extension, low, title=""):
-        return self._VideoCacheClass.create(
-            self._nicocache_filesystem, video_id, filename_extension, low, title)
+        else:
+            return cache_list[0]
 
-    def search(self, video_id, filename_extension, low, title=""):
-        """まずfetch()する
-        fetch()で見つからなかったら実際のファイルシステムについて、キャッシュルートディレクトリとサブディレクトリにキャッシュがあるか順に調べる
-        見つかればVideoCacheClass()が返る
-        見つかんなかったらNoneを返す
-        時間がかかるかもしれない
-        見つかったキャッシュファイルの拡張子が、引数で指定したfilename_extensionになってることは保証しない"""
-        video_cache = self.fetch(video_id, low)
-        if video_cache is not None:
-            return video_cache
+    def get_cache_list(self, rootdir, video_num, **kwargs):
+        video_cache_info_query = libnicocache.VideoCacheInfo.make_query(
+            rootdir=rootdir, video_num=video_num, **kwargs)
 
-        for tmp in (True, False):
-            if self._nicocache_filesystem.search_cache_file(
-                    video_id, filename_extension, tmp, low, title):
-                return self.fetch(video_id, low)
+        cache_list = self._VideoCacheClass.get_cache_list(
+            self._filesystem_wrapper, video_cache_info_query)
 
-        return None
+        return cache_list
+
+    def lazy_create(self, video_cache_info):
+        return self._VideoCacheClass(
+            self._filesystem_wrapper, video_cache_info)
+
+    def create(self, video_cache_info):
+        video_cache = self.lazy_create(video_cache_info)
+        video_cache.create()
+        return video_cache
 
 
-def abandon_body(res, body_file):
-    if body_file is None:
-        return
-    if res.is_chunked():
-        utility.server.trancefer_chunked(body_file, StringIO.StringIO())
-        return
-    length = httpmes.get_transfer_length(res)
-    if length == "unknown":
-        return
-
-    body_file.read(length)
-
-
-class ThumbInfo(object):
-
-    class NotThumbInfoError(Exception):
-        pass
-
-    def __init__(self, id):
-        """id はvideo_idかwatchページのurlのwatch/XXXXX のXXXXXの部分
-        常にXXXXX == video_idになるとは限らない(公式動画)
-        getthumbinfoはvideo_idでもwatchページの番号でも、どちらでも取れる"""
-        thumbinfo_etree = getthumbinfo_etree(id)
-        try:
-            # dirtyhack!!! python3に移植するまではすべてbytes型で文字列をやり取りする
-            # unicodeをオブジェクトの外に出さない！
-            self.video_id = thumbinfo_etree.find(
-                ".//video_id").text.encode(locale.getpreferredencoding(), 'replace')
-            self.title = thumbinfo_etree.find(
-                ".//title").text.encode(locale.getpreferredencoding(), 'replace')
-            self.movie_type = thumbinfo_etree.find(
-                ".//movie_type").text.encode(locale.getpreferredencoding(), 'replace')
-            self.size_high = thumbinfo_etree.find(
-                ".//size_high").text.encode(locale.getpreferredencoding(), 'replace')
-            self.size_low = thumbinfo_etree.find(
-                ".//size_low").text.encode(locale.getpreferredencoding(), 'replace')
-        except AttributeError:
-            raise ThumbInfo.NotThumbInfoError(str(thumbinfo_etree))
-
-
-def get_partial_http_resource((host, port),
-                              req,
-                              first_byte_pos,
-                              last_byte_pos=None,
-                              server_sockfile=None,
-                              load_body=False,
-                              nonproxy_camouflage=True):
+def get_partial_http_resource(
+        req, get_http_resource_func, server_sockfile,
+        first_byte_pos, last_byte_pos=None,):
     """Rengeヘッダをつけてからリクエストを送る"""
+
     if last_byte_pos is not None:
         req.headers["Range"] = (
             ''.join(("bytes=", str(first_byte_pos), "-", str(last_byte_pos))))
     else:
         req.headers["Range"] = (''.join(("bytes=", str(first_byte_pos), "-")))
-    return proxtheta.utility.client.get_http_resource((host, port), req,
-                                                      server_sockfile,
-                                                      load_body,
-                                                      nonproxy_camouflage)
+    return get_http_resource_func(req, server_sockfile)
+
+# アルゴリズム
+
+# 新規cache
+# log
+# ファイル名設定して新規作成
+# サーバからソケット取得
+# ラップして返す
+
+# tmp cache
+# video_numからキャッシュファイル特定
+# log
+# サーバからソケット取得
+# 異常があったらログをのこしてfallback
+# ラップして返す
+
+# complete cache
+# video_numからキャッシュファイル特定
+# open して返す
 
 
-class NicoCachingReader(CachingReader):
+class VideoCacheOperator:
+
+    """与えられた情報から得られる複数のキャッシュ候補から、
+    実装されたロジックを基に適切なキャッシュを絞り込んだ上でCRUDを行う.
+    このクラスを経由すると、クライアントが一つのvideo_numを与えると、
+    VideoCacheOperatorが、なんかいい感じに、矛盾することなく
+    ファイルシステム上のキャッシュファイルを操作してくれる.
+
+    しかし、このクラスは、一つのvideo_numに対し、複数のファイルがあることを隠蔽しない.
+
+    新しいキャッシュファイルをどこにどういう名前で作るか
+    既に存在するキャッシュをどういう順番で探索し、どのキャッシュファイルを使うか
+    等の挙動を決定する
+
+    NicoCacheの挙動を左右する重要なクラス"""
+
     # ***設計思想***
     # using cache: とかPartial download fromとかのキャッシュに関するログはすべてこのクラスのスコープで行うようにする
 
-    @classmethod
-    def create_response_with_complete_localcache(cls, video_cache):
-        """ローカルのキャッシュ(video_cache)だけを使用して動画リソース(ResponsePack)を返します
-        video_cacheがtmpの場合動作は未定義です
-        必ずチェックしてからこの関数に渡してください"""
+    def __init__(self, video_cache_manager, rootdir, logger=logger):
+        if 0:
+            """type def"""
+            self._video_cache_manager = VideoCacheManager()
 
-        if video_cache.is_tmp():
-            raise RuntimeError(
-                "create_response_with_complete_localcache(): video_cache must complete!")
+        self._video_cache_manager = video_cache_manager
 
-        logger.info("using cache: %s",
-                    video_cache.get_cachefilename())
+        self._rootdir = rootdir
 
+        self._logger = logger
+
+#     def rename_cache(
+#             self, video_num, new_video_cache_info, low=None, rootdir=None):
+#         video_cache = self._get_video_cache(video_num, low, rootdir)
+#         if video_cache is None:
+#             raise libnicocache.NoSuchCacheError("video_num: %s" % video_num)
+#
+#         video_cache.update_cache_info(new_video_cache_info)
+#
+#         return video_cache.info
+
+    def save_cache(
+            self, video_num, subdir, title=None, filename_extension=None,
+            video_id=None):
+
+        new_video_cache_info = VideoCacheInfo.create_for_update(
+            filename_extension=filename_extension, title=title, subdir=subdir,
+            video_id=video_id)
+
+        query = VideoCacheInfo.make_query(rootdir=self._rootdir, subdir="")
+
+        video_cache_list = self._get_video_cache_list(video_num)
+
+        saved_cache_info_list = []
+        for video_cache in video_cache_list:
+            if query.match(video_cache.info):
+
+                video_cache.update_cache_info(new_video_cache_info)
+                saved_cache_info_list.append(video_cache.info)
+                self._logger.info(
+                    "save cache: %s", video_cache.info.make_cache_file_path())
+
+        return saved_cache_info_list
+
+    def _get_video_cache_list(self, video_num, rootdir=None):
+        rootdir = rootdir or self._rootdir
+        return self._video_cache_manager.get_cache_list(
+            rootdir=rootdir, video_num=video_num)
+
+    def _get_video_cache(self, video_num, low, rootdir=None):
+        """見つからなければNoneを返す
+        rootdir=Noneなら適当に決める"""
+        rootdir = rootdir or self._rootdir
+        return self._video_cache_manager.get(
+            rootdir=rootdir, video_num=video_num, low=low)
+
+    def _create_video_cache(
+            self, video_num, low, default_video_type="sm", rootdir=None):
+        """rootdir=Noneなら適当に決める"""
+        rootdir = rootdir or self._rootdir
+        video_cache_info = VideoCacheInfo.create(
+            rootdir=self._rootdir, video_type=default_video_type,
+            video_num=video_num, low=low, tmp=True)
+
+        return self._video_cache_manager.create(video_cache_info)
+
+    def _make_http_video_resource_with_comlete_localcache(
+            self, video_cache, server_sockfile):
+
+        self._logger.info(
+            "using cache: %s", video_cache.info.make_cache_file_path())
         res = httpmes.HTTPResponse(("HTTP/1.1", 200, "OK"))
-        res.set_content_length(video_cache.get_cachefilelen())
-        res.headers["Content-Type"] = "video/mp4"
-
-        return proxtheta.server.ResponsePack(res, video_cache.get_cachefile())
-
-    @classmethod
-    def create_with_tmp_localcache_and_server(cls, video_cache,
-                                              videofile_from_server,
-                                              complete_video_size,
-                                              complete_cache=False):
-        """ローカルのキャッシュ(video_cache)と
-        サーバからの動画ファイル(videofile_from_server)
-        を使用してNicoCachingReaderを返します
-                video_cacheがtmpでない場合動作は未定義です
-                必ずチェックしてからこの関数に渡してください"""
-        if not video_cache.is_tmp():
-            raise RuntimeError(
-                "create_with_tmp_localcache_and_server():"
-                " video_cache must　not complete!")
-
-        if video_cache.exsists_in_filesystem():
-            logger.info(
-                "temporary cache found: %s",
-                video_cache.get_cachefilename())
-            logger.info(
-                "Partial download from %d byte",
-                video_cache.get_cachefilelen())
-        else:
-            logger.info(
-                "no cache found: " + video_cache.get_cachefilename())
-        return NicoCachingReader(video_cache,
-                                 originalfile=videofile_from_server,
-                                 length=complete_video_size,
-                                 complete_cache=complete_cache,
-                                 logger=logger)
-
-    @classmethod
-    def create_response_with_tmp_localcache_and_server(cls, video_cache,
-                                                       respack,
-                                                       complete_video_size,
-                                                       complete_cache=False):
-        """ローカルのキャッシュ(video_cache)と
-        サーバからの動画ファイル(videofile_from_server)
-        を使用してNicoCachingReaderを返します
-                video_cacheがtmpでない場合動作は未定義です
-                respack.res.status_code == 206 and respack.res.is_chunked()　
-                が Falseの場合動作は未定義です
-                必ずチェックしてからこの関数に渡してください"""
-
-        if respack.res.status_code != 206 or respack.res.is_chunked():
-            raise RuntimeError("server response must be 206 and NOT chunked!\n"
-                               "%s" % respack.res)
-
-        ncr = cls.create_with_tmp_localcache_and_server(
-            video_cache,
-            videofile_from_server=respack.body_file,
-            complete_video_size=complete_video_size,
-            complete_cache=complete_cache)
-
-        respack.body_file = ncr
-        respack.res.status_code = 200
-        respack.res.reason_phrase = "OK"
-        respack.res.headers[
-            "Content-Length"] = str(complete_video_size)
+        cachefile_path = video_cache.info.make_cache_file_path()
+        res.set_content_length(video_cache.get_size())
+        mimetype = guess_mimetype(cachefile_path)
+        if mimetype:
+            res.headers["Content-Type"] = mimetype
+        respack = ResponsePack(
+            res, body_file=video_cache.open(readonly=True),
+            server_sockfile=server_sockfile)
         return respack
 
-#     @staticmethod
-#     def _get_http_resource_with_complete_localcache(video_cache,
-#                                                     server_sockfile=None,
-#                                                     logger=logger):
-#         """ローカルのキャッシュ(video_cache)だけを使用して動画リソース(ResponsePack)を返します
-#         video_cacheがtmpの場合例外を投げます
-#         必ずチェックしてからこの関数に渡してください"""
-#
-#         if video_cache.is_tmp():
-#             raise RuntimeError(
-#                 "_get_http_resource_with_complete_localcache(): video_cache must complete!")
-#
-#         safe_close(server_sockfile)
-#
-#         logger.info("using cache: " + video_cache.get_cachefilename())
-#
-#         res = httpmes.HTTPResponse(("HTTP/1.1", 200, "OK"))
-#         res.set_content_length(video_cache.get_cachefilelen())
-#
-#         return proxtheta.server.ResponsePack(res, video_cache.get_cachefile())
-#
-#     @staticmethod
-#     def _get_http_resource_with_tmp_localcache_and_server(video_cache, complete_video_size, xxx_todo_changneme,
-#                                                             req,
-#                                                             server_sockfile=None,
-#                                                             nonproxy_camouflage=False,
-#                                                             complete_cache=False, logger=logger):
-#         """ローカルのキャッシュ(video_cache)と(host, port)で与えられたサーバを使用して動画リソース(ResponsePack)を返します
-#         video_cacheがtmpでない場合例外を投げます
-#         必ずチェックしてからこの関数に渡してください"""
-#         (host, port) = xxx_todo_changneme
-#         try:
-#             if not video_cache.is_tmp():
-#                 raise RuntimeError(
-#                     "_get_http_resource_with_tmp_localcache_and_server(): video_cache must　not complete!")
-#
-#             del req.headers["Accept-Encoding"]
-# http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688low
-#             if req.query.endswith("low"):
-#                 req.query = req.query[:-3]
-#
-# http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688
-#             if video_cache.is_economy():
-#                 req.query = req.query + "low"
-#
-#             respack = get_partial_http_resource((host, port), req,
-#                                                 first_byte_pos=video_cache.get_cachefilelen(),
-#                                                 last_byte_pos=None,
-#                                                 server_sockfile=server_sockfile,
-#                                                 nonproxy_camouflage=nonproxy_camouflage)
-#             server_sockfile = respack.server_sockfile
-#
-#             if respack.res.status_code == 200:
-#                 logger.info(
-#                     "temporary cache found: " + video_cache.get_cachefilename())
-#                 logger.info(
-#                     "response of video is not 206 Partial Content. cache will not work.")
-#                 return respack
-#
-#             elif respack.res.status_code == 206:
-# if respack.res.is_chunked():  # ないとは思うけど
-#                     logger.info(
-#                         "temporary cache found: " + video_cache.get_cachefilename())
-#                     logger.info(
-#                         "but response of video(206 Partial Content) is chunked. cache will not work.")
-#                     del req.headers["Range"]
-#                     server_sockfile.close()
-#                     server_sockfile = None
-#                     return proxtheta.utility.client.get_http_resource(
-#                         (host, port), req)
-#
-# else:  # めでたくエコノミー回避
-#                     if video_cache.exsists_in_filesystem():
-#                         logger.info(
-#                             "temporary cache found: " + video_cache.get_cachefilename())
-#                         logger.info(
-#                             "Partial download from " + str(video_cache.get_cachefilelen()) + " byte")
-#                     else:
-#                         logger.info(
-#                             "no cache found: " + video_cache.get_cachefilename())
-#                     ncr = NicoCachingReader(video_cache,
-#                                             originalfile=respack.body_file,
-#                                             length=complete_video_size,
-#                                             complete_cache=complete_cache, logger=logger)
-#                     respack.body_file = ncr
-#                     respack.res.status_code = 200
-#                     respack.res.reason_phrase = "OK"
-#                     respack.res.headers[
-#                         "Content-Length"] = str(complete_video_size)
-#                     return respack
-#
-#             else:
-#
-#                 return respack
-#         except:
-#             safe_close(server_sockfile)
-#
-#
-# ??video_numにマッチするファイルのリストを得る(lowでない)
-# ローカルに完全な非エコノミーキャッシュファイルがあるなら:
-# openして返す
-# else(非エコノミーキャッシュファイルが中途半端なキャッシュなら、もしくはキャッシュがないなら):
-# キャッシュの続きが非エコノミーでとれるなら(リクエストuriのクエリがlowで終わってるかどうかで判断):
-# NicoCachingReaderを提供
-# エコノミー動画しかとれないなら:
-# ローカルに完全なエコノミーキャッシュファイルがあるなら:
-# openして返す
-# 中途半端なキャッシュしかない、もしくはキャッシュがないなら:
-# NicoCachingReaderを提供
-# #
-#
-#     @classmethod
-#     def get_http_resource_with_localcache(cls, video_cache_getter, thumbinfo, option, xxx_todo_changeme1,
-#                                           req,
-#                                           server_sockfile=None,
-#                                           nonproxy_camouflage=False,
-#                                           complete_cache=False, logger=logger):
-#         (host, port) = xxx_todo_changeme1
-#         body_file = None
-#         try:
-# fixme!!!タイトル変わってるときの挙動は？
-#             video_id = thumbinfo.video_id
-#             title = thumbinfo.title
-#             movie_type = thumbinfo.movie_type
-#
-#             video_cache = video_cache_getter.get(video_id, low=False)
-#
-#             video_cache.set_title(title)
-#             if not video_cache.exsists_in_filesystem():
-#                 video_cache.set_filename_extension(movie_type)
-#
-#             if video_cache.is_complete():
-# 非エコノミーな完全キャッシュがあるとき
-#                 return cls._get_http_resource_with_complete_localcache(
-#                     video_cache, server_sockfile, logger)
-#
-#             else:
-#                 if not req.query.endswith("low"):
-# 非エコノミーな不完全なキャッシュがとれるとき(サーバによるエコノミー強制がかかってないとき)
-#                     return cls._get_http_resource_with_tmp_localcache_and_server(video_cache,
-# complete_video_size=
-#                                                                                    int(
-#                                                                                        thumbinfo.size_high),
-#                                                                                    (host,
-#                                                                                     port),
-#                                                                                    req,
-#                                                                                    server_sockfile,
-#                                                                                    nonproxy_camouflage,
-#                                                                                    complete_cache, logger)
-#                 else:
-# !!!このコードデジャブだからなんとかしたい
-#                     video_cache = video_cache_getter.get(video_id, low=True)
-#                     video_cache.set_title(title)
-#                     if not video_cache.exsists_in_filesystem():
-#                         video_cache.set_filename_extension(movie_type)
-#
-#                     if video_cache.is_complete():
-# エコノミーな完全なキャッシュがある
-#                         return cls._get_http_resource_with_complete_localcache(
-#                             video_cache, server_sockfile, logger)
-#                     else:
-#                         return cls._get_http_resource_with_tmp_localcache_and_server(video_cache,
-# complete_video_size=
-#                                                                                        int(
-#                                                                                            thumbinfo.size_low),
-#                                                                                        (host,
-#                                                                                         port),
-#                                                                                        req,
-#                                                                                        server_sockfile,
-#                                                                                        nonproxy_camouflage,
-#                                                                                        complete_cache, logger)
-#
-#         except:
-#             safe_close(server_sockfile)
-#             safe_close(body_file)
-#             raise
+    def _make_http_video_resource_with_tmp_localcache(
+            self, video_cache, is_new_cache, req,
+            http_resource_getter_func, server_sockfile):
 
-    @property
-    def videofilename(self):
-        return self._video_cache.get_cachefilename()
+        del req.headers["Accept-Encoding"]
 
-    def __init__(self, video_cache, originalfile, length,
-                 complete_cache=False, logger=logger):
-        if 0:
-            """arg type"""
-            video_cache = VideoCache()
+        if is_new_cache:
+            self._logger.info(
+                "no cache found: %s",
+                video_cache.info.make_cache_file_path())
 
-        self._video_cache = video_cache
-        CachingReader.__init__(
-            self, video_cache.get_cachefile(), originalfile, length, complete_cache, logger)
+            del req.headers["Range"]
 
-    def read(self, size=-1):
-        self._logger.debug("NicoCachingReader.read(): %s", self.videofilename)
-        return CachingReader.read(self, size=size)
-
-    def close(self):
-
-        if self._complete_cache:
-            self._logger.info("continue caching: " + self.videofilename)
-
-        CachingReader.close(self)
-
-        # nicocache apiによって保存された時に名前が変わってるかもしれないからこうする
-        # dirty!!! グローバル変数に依存
-        # todo!!! キャッシュを開いたり閉じたりするロジック(つまりcreate_*関数とcloseメソッド)
-        # をどっかに分離する
-        # 案の定ユニットテストが失敗する…
-        self._video_cache = nicocache.video_cache_getter.get(
-            self._video_cache.get_videoid(),
-            self._video_cache.is_economy())
-
-        if self._left_size == 0:
-            # close()するまでハードディスクにかきこまれてないかもしれないので
-            # read()内でself._left_size == 0をチェックするのではなく、ここでチェックしてログを残す
-            self._video_cache.change_to_complete_cache()
-            self._logger.info("cache completed: " + self.videofilename)
         else:
-            self._logger.info("suspended: " + self.videofilename)
+            self._logger.info(
+                "temporary cache found: %s",
+                video_cache.info.make_cache_file_path())
 
-    def __del__(self):
-        try:
-            if not self._closed:
-                self._logger.error(
-                    "not correctly closed: " + self.videofilename)
-                CachingReader.__del__(self)
-        except Exception:
-            pass
+            req.headers["Range"] = (
+                # (例)Range: bytes=100-
+                ''.join(("bytes=", str(video_cache.get_size()), "-")))
+
+        # サーバから動画の続きを取ってくる
+        # self._get_http_video_resourceを用意したのは苦肉の策
+        # もっといい関数の切り分け方があるなら教えて to コードレビューする人
+        (respack, complete_video_size,
+         is_unexpected_response) = self._get_http_video_resource(
+            video_cache, is_new_cache, req,
+            http_resource_getter_func, server_sockfile)
+
+        if is_unexpected_response:
+            return respack
+
+        if not is_new_cache:
+            self._logger.info(
+                "Partial download from %d byte", video_cache.get_size())
+
+        respack.body_file = self._NicoCachingReader(
+            video_cache, respack.body_file, complete_video_size)
+        respack.res.status_code = 200
+        respack.res.reason_phrase = "OK"
+        respack.res.headers["Content-Length"] = str(complete_video_size)
+        return respack
+
+    def _get_http_video_resource(
+            self, video_cache, is_new_cache, req,
+            http_resource_getter_func, server_sockfile):
+        """return (respack, complete_video_size, is_unexpected_response)"""
+
+        respack = http_resource_getter_func(req, server_sockfile)
+
+        # キャッシュを掛けられない普通じゃない レスポンスの為のガード節
+        if not (respack.res.status_code == 200 or
+                respack.res.status_code == 206):
+            return respack, None, True
+
+        if (respack.res.status_code == 206 and
+                respack.res.is_chunked()):
+            # ないとは思うけど
+            self._logger.warn(
+                "response of video(206 Partial Content) is chunked. "
+                "cache will not work. (fall back).\n"
+                "%s ", respack.res)
+            del req.headers["Range"]
+            respack.close_all()
+            return http_resource_getter_func(req, None), None, True
+
+        if respack.res.status_code == 200:
+            complete_video_size = httpmes.get_transfer_length(respack.res, req)
+
+            # 長さ不明でキャッシュを掛けられないレスポンスの為のガード節
+            if not (isinstance(complete_video_size, int) and
+                    complete_video_size >= 0):
+                self._logger.warn(
+                    "length of response is unknown. "
+                    "cache will not work. (fall back).\n"
+                    "%s ", respack.res)
+                return respack, None, True
+
+            # tmpキャッシュがあるからRangeヘッダ送ったのに200だった時の レスポンス
+            # キャッシュを上書きして作りなおす
+            if respack.res.status_code == 200 and not is_new_cache:
+                self._logger.warn(
+                    "response of video is not 206 Partial Content.\n"
+                    "Overwrite cache file: %s",
+                    video_cache.info.make_cache_file_path())
+
+                video_cache.remove()
+                video_cache.create()
+
+        if respack.res.status_code == 206:
+
+            complete_video_size_str = respack.res.headers["Content-Range"].\
+                split("/")[1]  # "Range: bytes: 30-50/100" => "100"
+
+            # 長さ不明でキャッシュを掛けられない レスポンスの為のガード節
+            if complete_video_size_str == "*":
+                self._logger.warn(
+                    "not implemented response type: %s\n"
+                    " cache will not work (fall back).\n"
+                    "%s ", respack.res.headers["Content-Range"], respack.res)
+                respack.close_all()
+                return http_resource_getter_func(req, None), None, True
+
+            complete_video_size = int(complete_video_size_str)
+
+        return respack, complete_video_size, False
+
+    def make_http_video_resource(
+            self, req, http_resource_getter_func, server_sockfile):
+        """reqを基にローカルのキャッシュからレスポンスを作ったり、
+        http_resource_getter_funcを用いてニコニコ動画のサーバから動画を取ってきたりする
+        def http_resource_getter_func(req, server_sockfile) => ResponsePack:
+        """
+
+        video_type, video_num, is_low = get_videotype_videonum_islow__with_req(
+            req, None)
+        video_cache = self._get_video_cache(video_num, is_low)
+
+        if video_cache is None:
+            # キャッシュがなく新規作成するとき
+            video_cache = self._create_video_cache(
+                video_num, is_low, video_type)
+            return self._make_http_video_resource_with_tmp_localcache(
+                video_cache, True, req,
+                http_resource_getter_func, server_sockfile)
+
+        elif video_cache.info.tmp:
+            # 非完全なキャッシュがローカルにある場合
+            return self._make_http_video_resource_with_tmp_localcache(
+                video_cache, False, req,
+                http_resource_getter_func, server_sockfile)
+
+        else:
+            # 完全なキャッシュがローカルにある場合
+            respack = self._make_http_video_resource_with_comlete_localcache(
+                video_cache, server_sockfile)
+
+        return respack
+
+    class _NicoCachingReader(CachingReader):
+
+        @property
+        def videofilename(self):
+            return self._video_cache.info.make_cache_file_path()
+
+        def __init__(self, video_cache, originalfile, length,
+                     complete_cache=False, logger=logger):
+            #             if 0:
+            #                 """arg type"""
+            #                 video_cache_info = libnicocache.VideoCacheInfo()
+
+            self._video_cache = video_cache
+            cachefile = self._video_cache.open()
+            CachingReader.__init__(
+                self, cachefile, originalfile, length, complete_cache, logger)
+
+        def read(self, size=-1):
+            self._logger.debug(
+                "_NicoCachingReader.read(): %s", self.videofilename)
+            return CachingReader.read(self, size=size)
+
+        def close(self):
+
+            if self._complete_cache:
+                self._logger.info("continue caching: " + self.videofilename)
+
+            CachingReader.close(self)
+
+            if self._left_size == 0:
+                # close()するまでハードディスクにかきこまれてないかもしれないので
+                # read()内でself._left_size == 0をチェックするのではなく、ここでチェックしてログを残す
+                self._video_cache.change_to_complete_cache()
+                self._logger.info("cache completed: " + self.videofilename)
+            else:
+                self._logger.info("suspended: " + self.videofilename)
+
+        def __del__(self):
+            try:
+                if not self._closed:
+                    self._logger.error(
+                        "not correctly closed: " + self.videofilename)
+                    CachingReader.__del__(self)
+            except Exception:
+                pass
 
 
 class Extension():
@@ -1237,7 +528,7 @@ class NicoCache(object):
             Noneの場合secondary proxyを通さない
             (host, port)が設定されればそこを経由する
         secondary_proxy_addr が Noneでないなら"""
-        self.video_cache_getter = None
+        self.video_cache_operator = None
         self.secondary_proxy_addr = None
         self.nonproxy_camouflage = True
         self.complete_cache = False
@@ -1293,31 +584,6 @@ class NicoCache(object):
             load_body,
             nonproxy_camouflage=False)  # 自前で処理するのでnonproxy_camouflageはFalse
 
-    def _get_partial_http_resource(self,
-                                   req,
-                                   first_byte_pos,
-                                   last_byte_pos=None,
-                                   server_sockfile=None,
-                                   load_body=False,
-                                   nonproxy_camouflage=None):
-        """nicocache.get_partial_http_resource()
-        のラッパーだが、(host, port)は__init__で設定されたセカンダリproxyを使うか、reqから推測される
-        =Noneとなっているパラメータは、__init__で設定された値がデフォルトで使われる
-        __init__でセカンダリproxyが設定されている場合と、されていない場合で
-        nonproxy_camouflage=Trueのときの挙動が異なる
-        後者の場合、GET http://host:8080/ ...はGET / ...となるが、前者だと変更されない
-        どちらの場合もhop by hop ヘッダは削除される"""
-        (host, port), req = self._get_http_resource_hook(req,
-                                                         nonproxy_camouflage)
-
-        return get_partial_http_resource((host, port), req,
-                                         first_byte_pos,
-                                         last_byte_pos,
-                                         server_sockfile,
-                                         load_body,
-                                         nonproxy_camouflage=False)
-        # 自前で処理するのでnonproxy_camouflageはFalse
-
     @convert_upstream_error
     def simple_proxy_response_server(self, req, server_sockfile, info):
         host, port = req.host, req.port
@@ -1339,101 +605,17 @@ class NicoCache(object):
     @convert_upstream_error
     def handle_video_request(self, req, server_sockfile, info, logger=None):
         logger = (logger if logger is not None else self.logger)
-        video_cache_getter = self.video_cache_getter
-
-        (host, port) = (req.host, req.port)
+        video_cache_operator = self.video_cache_operator
 
         if (req.host.startswith("smile-") and
                 req.host.endswith(".nicovideo.jp") and
-                req.path == "/smile"):  # 例えば http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688
+                req.path == "/smile"):
+            # 例えば http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688
 
-            video_id = get_videoid_with_httpreq(None, req)
-            video_cache = video_cache_getter.get(video_id, low=False)
-
-            # video_cache.set_title("")
-
-            if video_cache.is_complete():
-                # 完全キャッシュがあるとき
-
-                respack = NicoCachingReader.\
-                    create_response_with_complete_localcache(video_cache)
-                respack.server_sockfile = server_sockfile
-                return respack
-            else:
-                # 完全キャッシュがないとき
-                del req.headers["Accept-Encoding"]
-                # http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688low
-                if req.query.endswith("low"):
-                    video_cache = video_cache_getter.get(video_id, low=True)
-                    if video_cache.is_complete():
-                        respack = NicoCachingReader.\
-                            create_response_with_complete_localcache(
-                                video_cache)
-                        respack.server_sockfile = server_sockfile
-                        return respack
-
-                else:
-                    video_cache = video_cache_getter.get(video_id, low=False)
-
-                # video_cache.set_title("")
-
-                respack = self._get_partial_http_resource(req,
-                                                          first_byte_pos=video_cache.get_cachefilelen(),
-                                                          last_byte_pos=None,
-                                                          server_sockfile=server_sockfile)
-
-                if respack.res.status_code == 200:
-                    logger.warn(
-                        "temporary cache found: " + video_cache.get_cachefilename())
-                    logger.warn(
-                        "response of video is not 206 Partial Content. cache will not work.")
-                    return respack
-
-                elif respack.res.status_code == 206 and respack.res.is_chunked():
-                    logger.warn(
-                        "temporary cache found: " + video_cache.get_cachefilename())
-                    logger.warn(
-                        "but response of video(206 Partial Content) is chunked. cache will not work.")
-                    del req.headers["Content-Range"]
-                    server_sockfile.close()
-                    server_sockfile = None
-                    return proxtheta.utility.client.get_http_resource(
-                        (host, port), req)
-
-                elif respack.res.status_code != 206:
-                    return respack
-
-                if not video_cache.exsists_in_filesystem():
-                    content_type = respack.res.headers.get(
-                        "Content-Type", None)
-                    if content_type is None:
-                        video_cache.set_filename_extension("unknown")
-                    else:
-                        filename_extension = guess_filename_extension(
-                            content_type)
-                        if filename_extension is None:
-                            logger.warn("unknown mimetype: %s", content_type)
-                            video_cache.set_filename_extension("unknown")
-                        else:
-                            video_cache.set_filename_extension(
-                                filename_extension)
-
-                complete_video_size_str = respack.res.headers["Content-Range"].\
-                    split("/")[1]  # "Range: bytes: 30-50/100" => "100"
-                if complete_video_size_str == "*":
-                    raise NotImplemented(
-                        "%s is not implemented response type\n"
-                        "%s ", respack.res.headers["Content-Range"], respack.res)
-
-                complete_video_size = int(complete_video_size_str)
-
-                respack = NicoCachingReader.\
-                    create_response_with_tmp_localcache_and_server(video_cache,
-                                                                   respack,
-                                                                   complete_video_size,
-                                                                   self.complete_cache)
-                respack.server_sockfile = server_sockfile
-                return respack
+            return video_cache_operator.make_http_video_resource(
+                req,
+                http_resource_getter_func=self.get_http_resource,
+                server_sockfile=server_sockfile)
 
         else:
             # ニコニコ動画の動画ファイルへのアクセスでないとき
@@ -1482,9 +664,9 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
     """とりあえず saveだけ"""
     macher = re.compile("/watch/([^/]+)/(.+)")
 
-    def __init__(self, video_cache_getter):
+    def __init__(self, video_cache_operator):
 
-        self.video_cache_getter = video_cache_getter
+        self.video_cache_operator = video_cache_operator
         proxtheta.utility.server.ResponseServer.__init__(self)
 
     def accept(self, req, info):
@@ -1502,15 +684,28 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
 
         res = httpmes.HTTPResponse(
             ("HTTP/1.1", 200, "OK"))
-
-        video_cache = self.video_cache_getter.get(watch_id, low=False)
+        res.headers["Content-type"] = "text/plain ;charset=utf-8"
 
         thumbinfo = ThumbInfo(watch_id)
-        title = thumbinfo.title
-        video_cache.set_title(title)
-        res_body = ("NicoCacheAPI command successed: %s %s %s" %
-                    (command, watch_id,
-                     video_cache.get_video_cache_filepath()))
+
+        saved_cache_info_list = self.video_cache_operator.save_cache(
+            video_num=thumbinfo.video_id[2:],
+            subdir="save",
+            video_id=thumbinfo.video_id,
+            title=thumbinfo.title,
+            filename_extension=thumbinfo.movie_type)
+
+        logs = []
+
+        for cache_info in saved_cache_info_list:
+            log = ("%s %s %s\n" %
+                   (command, thumbinfo.video_id,
+                    cache_info.make_cache_file_path()))
+
+            logs.append(log)
+
+        res_body = "NicoCacheAPI command success: \n" + ''.join(logs)
+
         logger.info(res_body)
         res.body = res_body.decode(
             locale.getpreferredencoding()).encode("utf-8")
@@ -1532,7 +727,9 @@ def load_extensions():
     return extensions
 
 
-def main(argv):
+def main():
+    import sys
+    argv = sys.argv
     argc = len(argv)
     if argc > 1 and ("debug" in argv):
         _logging.basicConfig(format="%(levelname)s:%(name)s: %(message)s")
@@ -1563,15 +760,21 @@ def main(argv):
     if not os.path.isdir(cache_dir_path):
         os.mkdir(cache_dir_path)
 
+    save_dir_path = "./cache/save"
+    if not os.path.isdir(save_dir_path):
+        os.mkdir(save_dir_path)
+
     logger.info("making video cache file path table")
 
     # ファクトリやらシングルトンやらの初期化
-    nicocache_filesystem = NicoCacheFileSystem(cache_dir_path, recursive)
-    video_cache_getter = VideoCacheGetter(nicocache_filesystem)
+    video_cache_manager = VideoCacheManager(
+        libnicocache.pathutil.FileSystemWrapper)
+    video_cache_operator = VideoCacheOperator(
+        video_cache_manager, rootdir="cache")
 
     logger.info("finish making video cache file path table")
 
-    nicocache.video_cache_getter = video_cache_getter
+    nicocache.video_cache_operator = video_cache_operator
     nicocache.secondary_proxy_addr = secondary_proxy_addr
     nicocache.nonproxy_camouflage = nonproxy_camouflage
     nicocache.complete_cache = complete_cache
@@ -1579,7 +782,7 @@ def main(argv):
     default_request_filters = []
     default_response_servers = [CONNECT_Handler(),
                                 ReqForThisServerHandler(),
-                                NicoCacheAPIHandler(video_cache_getter),
+                                NicoCacheAPIHandler(video_cache_operator),
                                 nicocache.handle_video_request,
                                 nicocache.simple_proxy_response_server]
     default_response_filters = []
@@ -1617,10 +820,9 @@ def main(argv):
         return proxtheta.server.run_multithread(handler, port=port)
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt occurred. finish nococache.py.")
-        return
+        return 0
 
 
 if __name__ == "__main__":
-    import sys
 
-    main(sys.argv)
+    exit(main())

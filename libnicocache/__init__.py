@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -
-import unittest
 
 from collections import namedtuple
 import os
@@ -15,8 +14,34 @@ root_cache_dir = "cache"
 def _if_not_None_else(newvalue, basevalue):
     return newvalue if newvalue is not None else basevalue
 
+
+class NicoVideoTypeTable:
+
+    """動画ファイルのURL(http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688lowとか)
+    にはsmとかnmとかsoとか含まれない
+    なのでhttp://www.nicovideo.jp/watch/sm12345みたいなアクセスがあったときに、
+    番号と動画タイプの組をキャッシュしておく用のクラス"""
+    # todo!!! スレッドセーフ"
+
+    def __init__(self):
+        self._table = {}
+
+    def add_videoid(self, video_id):
+        """video_idはsm12345とかnm67890みたいなの"""
+        self.add_videotype_and_videonum(video_id[0:2], video_id[2:])
+
+    def add_videotype_and_videonum(self, video_type, video_num):
+        self._table[video_num] = video_type
+
+    def get_videotype(self, video_num):
+        if video_num in self._table:
+            return self._table[video_num]
+        return None
+
+
 _VideoCacheInfo = namedtuple("VideoCacheInfo",
-                             ["video_id",
+                             ["video_type",
+                              "video_num",
                               "tmp",
                               "low",
                               "filename_extension",
@@ -25,24 +50,82 @@ _VideoCacheInfo = namedtuple("VideoCacheInfo",
                               "rootdir"])
 
 
+class VideoCacheInfoParameterError(Exception):
+    pass
+
+
 class VideoCacheInfo(_VideoCacheInfo):
     # キャッシュのファイル名=メタデータに関するアルゴリズムはすべてこのクラスにまとめてあるので、
     # VideoCacheInfo=MyVideoCacheInfoな感じで一回モンキーパッチを当てれば置き換えられる
 
-    pattern = re.compile("(tmp_)?(\w\w[0-9]+)(low)?(_.*)?")
+    pattern = re.compile("(?P<tmp>tmp_)?"
+                         "(?P<video_type>\w\w)"
+                         "(?P<video_num>[0-9]+)"
+                         "(?P<low>low)?"
+                         "(?P<_title>_.*)?")
 
-    def __new__(cls, video_id=None, tmp=None, low=None,
+    @property
+    def video_id(self):
+        return self.video_type + self.video_num
+
+    def __new__(cls, video_type, video_num, tmp=None, low=None,
                 filename_extension=None, title=None, subdir=None, rootdir=None):
         # ここのapiはまだ安定してない
-        return _VideoCacheInfo.__new__(cls, video_id, tmp, low, filename_extension, title, subdir, rootdir)
+        return _VideoCacheInfo.__new__(
+            cls, video_type, video_num, tmp, low,
+            filename_extension, title, subdir, rootdir)
 
     @classmethod
-    def make_query(cls, rootdir, video_id=None, tmp=None, low=None,
+    def create(cls, rootdir, video_type=None, video_num=None, video_id=None, tmp=False, low=False,
+               filename_extension="", title="", subdir=""):
+        if video_id is not None:
+            video_type = video_id[:2]
+            video_num = video_id[2:]
+        if (video_type is None and video_num is None):
+            bad_video_cache_info = VideoCacheInfo(video_type, video_num, tmp, low,
+                                                  filename_extension, title, subdir, rootdir)
+            raise VideoCacheInfoParameterError(
+                "(video_type, video_num) or video_id must be given.\n"
+                " video_id=%s, %s" %
+                (video_id, repr(bad_video_cache_info)))
+
+        return cls(
+            video_type, video_num,
+            tmp, low, filename_extension,
+            title, subdir=subdir, rootdir=rootdir)
+
+    @classmethod
+    def create_for_update(
+            cls, rootdir=None, video_type=None, video_num=None,
+            video_id=None, tmp=None, low=None,
+            filename_extension=None, title=None,
+            subdir=None):
+
+        if video_id is not None:
+            video_type = video_id[:2]
+            video_num = video_id[2:]
+
+        return cls(video_type, video_num, tmp, low,
+                   filename_extension, title, subdir, rootdir)
+
+    @classmethod
+    def make_query(cls, rootdir, video_type=None, video_num=None, video_id=None, tmp=None, low=None,
                    filename_extension=None, title=None, subdir=None):
-        return cls(video_id, tmp, low, filename_extension, title, subdir, rootdir)
+        if video_id is not None:
+            video_type = video_id[:2]
+            video_num = video_id[2:]
+        return cls(video_type, video_num, tmp, low, filename_extension, title, subdir, rootdir)
 
     def replace(self, **kwargs):
         return self._replace(**kwargs)
+
+    def update(self, new_video_cache_info):
+        new_info_asdict = new_video_cache_info._asdict()
+        for key in new_info_asdict:
+            if new_info_asdict[key] is None:
+                del new_info_asdict[key]
+
+        return self.replace(**new_info_asdict)
 
     @classmethod
     def create_from_filename(cls, filename, rootdir, subdir=""):
@@ -57,18 +140,22 @@ class VideoCacheInfo(_VideoCacheInfo):
         if not m:
             raise RuntimeError("VideoCacheInfo parse error")
 
-        if m.group(1):
+        if m.group("tmp"):
             tmp = True
 
-        video_id = m.group(2)
+        video_type = m.group("video_type")
+        video_num = m.group("video_num")
 
-        if m.group(3):
+        if m.group("low"):
             low = True
 
-        if m.group(4):
-            title = m.group(4)[1:]  # _(アンダーバー)もタイトルにマッチしてしまうので[1:]とする
+        if m.group("_title"):
+            title = m.group("_title")[1:]  # _(アンダーバー)もタイトルにマッチしてしまうので[1:]とする
 
-        return cls(video_id, tmp, low, filename_extension, title, subdir=subdir, rootdir=rootdir)
+        return cls(
+            video_type, video_num,
+            tmp, low, filename_extension,
+            title, subdir=subdir, rootdir=rootdir)
 
     @classmethod
     def create_from_relpath(cls, relpath, rootdir):
@@ -131,70 +218,27 @@ class VideoCacheInfo(_VideoCacheInfo):
         return True
 
 
-class VideoCacheManager(object):
+class CacheAlreadyExistsError(Exception):
 
-    """video_cache_infoと実際のファイルシステム上のキャッシュファイルを
-    結びつけた上でCRUDを行うクラス.
-    なるべくキャッシュがファイルであることを隠蔽することを目的としている.
-    プログラマはvideo_cache_info.make_cache_file_path()
-    を呼んで直接ファイルを操作するのではなく、
-    出来る限りVideoCacheManagerを経由しなくてはならない."""
-    # キャッシュがファイルであることを完全に隠蔽すると
-    # ログを残すときにpathを表示されたかったり、
-    # VideoCacheManagerにないファイル操作をしたいときに
-    # 困ってしまうので、完全に隠蔽できない
+    def __init__(self, mes):
+        Exception.__init__(self, mes)
 
-    # [キャッシュへのwrite, read,close以外のCRUDはすべてVideoCacheManagerを経由させる]
 
-    # 設計としてはVideoCacheInfo と VideoCacheManagerは
-    # ORマッパーのEntity と EntityManager に当たる
-    # が、管理するのがファイルシステム上のファイルなので、話がややこしくなってる
-    # 本家nlのCacheクラスやjava.nio.File, python3.4のpathlibみたいに、
-    # オブジェクトそのものにCRUD操作を実装する設計にするか非常に迷った
-    # というか今も若干迷う
-    # まあ、欲しくなったら本家nlのCacheクラスみたいなの作ってラップできるけどね
+class NoSuchCacheError(Exception):
 
-    # もしオブジェクトそのものにCRUD操作を実装する設計にすると
-    # 例えば、初版のnicocache py(仮)のように
-    # VideoCache と VideoCacheGetterに分けるとすると
-    # ２つのクラスが別々にファイルシステム(実際にはFileSystemWrapperオブジェクト)
-    # にアクセスすることになり、ファイルシステムであることを隠蔽する度合いが低くなる
-    # ファイルシステムであることの隠蔽は、なるべく1つのクラスで行いたい
+    def __init__(self, mes):
+        Exception.__init__(self, mes)
 
-    # また、将来VideoCacheManagerでVideoCacheInfoをキャッシュしたくなった場合
-    # FileSystemWrapperへの委譲を一ヶ所で隠蔽してないと不可能になってしまう
 
-    # よって、キャッシュへのwrite, read,close以外のCRUDはすべてVideoCacheManagerを経由させる
+class VideoCache:
 
-    class AlreadyExistsError(Exception):
+    @classmethod
+    def get_cache_list(
+            cls, filesystem_wrapper, video_cache_info_query, recursive=True):
 
-        def __init__(self, mes):
-            Exception.__init__(self, mes)
-
-    class NoSuchCacheError(Exception):
-
-        def __init__(self, mes):
-            Exception.__init__(self, mes)
-
-    def __init__(self, filesystem_wrapper):
-        self._filesystem_wrapper = filesystem_wrapper
-
-    def exists(self, video_cache_info):
-        return os.path.exists(video_cache_info.make_cache_file_path())
-
-    def create_new_cache(self, video_cache_info):
-        """キャッシュが既に存在していた場合例外を投げます"""
-        cache_file_path = video_cache_info.make_cache_file_path()
-        if self.exists(video_cache_info):
-            raise self.AlreadyExistsError(video_cache_info)
-
-        with self._filesystem_wrapper.open(cache_file_path, "w"):
-            pass
-
-    def get_cache_list(self, video_cache_info_query, recursive=True):
-        video_cache_info_list = []
+        video_cache_list = []
         rootdir = video_cache_info_query.rootdir
-        walk_iterator = self._filesystem_wrapper.walk(
+        walk_iterator = filesystem_wrapper.walk(
             rootdir, followlinks=True)
         if not recursive:
             walk_iterator = [next(walk_iterator)]
@@ -208,261 +252,76 @@ class VideoCacheManager(object):
                     create_from_filename(
                         filename, subdir=subdirpath, rootdir=rootdir)
                 if video_cache_info_query.match(a_video_cache_info):
-                    video_cache_info_list.append(a_video_cache_info)
+                    video_cache = cls(filesystem_wrapper, a_video_cache_info)
+                    video_cache_list.append(video_cache)
 
-        return video_cache_info_list
+        return video_cache_list
 
-    def open_cache_file(self, video_cache_info, readonly=False):
-        """存在していないキャッシュをopenしようとした場合例外を投げます"""
-        cache_file_path = video_cache_info.make_cache_file_path()
+    def __init__(self, filesystem_wrapper, video_cache_info):
+        self._filesystem_wrapper = filesystem_wrapper
+        self._video_cache_info = video_cache_info
+
+    @property
+    def info(self):
+        return self._video_cache_info
+
+    def exists(self):
+        return os.path.exists(self._video_cache_info.make_cache_file_path())
+
+    def create(self):
+        """キャッシュが既に存在していた場合例外を投げます"""
+        cache_file_path = self._video_cache_info.make_cache_file_path()
+        if self.exists():
+            raise CacheAlreadyExistsError(self._video_cache_info)
+
+        with self._filesystem_wrapper.open(cache_file_path, mode="wb"):
+            pass
+
+    def open(self, readonly=False):
+        cache_file_path = self._video_cache_info.make_cache_file_path()
 
         if readonly:
             mode = "rb"
         else:
             mode = "r+b"
-        if not self.exists(video_cache_info):
-            raise self.NoSuchCacheError(video_cache_info)
+
         return self._filesystem_wrapper.open(cache_file_path, mode)
 
-    def update_cache_info(self, video_cache_info, new_video_cache_info):
-        if not self.exists(video_cache_info):
-            raise self.NoSuchCacheError(video_cache_info)
-        oldpath = video_cache_info.make_cache_file_path()
+    def update_cache_info(self, new_video_cache_info):
+
+        new_video_cache_info = self._video_cache_info.update(
+            new_video_cache_info)
+        oldpath = self._video_cache_info.make_cache_file_path()
         newpath = new_video_cache_info.make_cache_file_path()
 
         self._filesystem_wrapper.rename(oldpath, newpath)
 
-    def remove_cache(self, video_cache_info):
-        if not self.exists(video_cache_info):
-            raise self.NoSuchCacheError(video_cache_info)
+        self._video_cache_info = new_video_cache_info
+
+    def get_size(self):
+        return os.path.getsize(self._video_cache_info.make_cache_file_path())
+
+    def remove(self):
+        if not self.exists():
+            raise NoSuchCacheError(self._video_cache_info)
         self._filesystem_wrapper.remove(
-            video_cache_info.make_cache_file_path())
+            self._video_cache_info.make_cache_file_path())
 
-    def get_mtime(self, video_cache_info):
-        if not self.exists(video_cache_info):
-            raise self.NoSuchCacheError(video_cache_info)
+    def get_mtime(self):
+        if not self.exists():
+            raise NoSuchCacheError(self._video_cache_info)
         return self._filesystem_wrapper.getmtime(
-            video_cache_info.make_cache_file_path())
+            self._video_cache_info.make_cache_file_path())
 
-    def touch(self, video_cache_info):
-        if not self.exists(video_cache_info):
-            raise self.NoSuchCacheError(video_cache_info)
+    def touch(self):
+        """unixのtouchコマンドと違い、touchで新規作成できないので注意"""
+
+        if not self.exists():
+            raise NoSuchCacheError(self._video_cache_info)
         self._filesystem_wrapper.touch(
-            video_cache_info.make_cache_file_path())
+            self._video_cache_info.make_cache_file_path())
 
-############### unittest #####################
-verbosity = 1
-root_test_dir_path = "./_testdir"
+    def change_to_complete_cache(self):
 
-
-class TestVideoCacheInfo(unittest.TestCase):
-
-    def test(self):
-        cache_file_name = "subdir1/subdir2/tmp_sm12345low_title56789.avi.mp4"
-        info = VideoCacheInfo.create_from_relpath(
-            cache_file_name, rootdir="./cache/")
-        self.assertEqual(info.video_id, "sm12345")
-        self.assertEqual(info.tmp, True)
-        self.assertEqual(info.low, True)
-        self.assertEqual(info.title, "title56789.avi")
-        self.assertEqual(info.filename_extension, "mp4")
-        self.assertEqual(info.subdir, "subdir1/subdir2")
-
-    def test_no_title(self):
-        cache_file_name = "subdir1/subdir2/tmp_sm12345low.mp4"
-        info = VideoCacheInfo.create_from_relpath(
-            cache_file_name, rootdir="./cache/")
-
-        self.assertEqual(info.video_id, "sm12345")
-        self.assertEqual(info.tmp, True)
-        self.assertEqual(info.low, True)
-        self.assertEqual(info.title, "")
-        self.assertEqual(info.filename_extension, "mp4")
-        self.assertEqual(info.subdir, "subdir1/subdir2")
-
-    def test_no_filename_extension(self):
-        cache_file_name = "subdir1/subdir2/tmp_sm12345low"
-        info = VideoCacheInfo.create_from_relpath(
-            cache_file_name, rootdir="./cache/")
-
-        self.assertEqual(info.video_id, "sm12345")
-        self.assertEqual(info.tmp, True)
-        self.assertEqual(info.low, True)
-        self.assertEqual(info.title, "")
-        self.assertEqual(info.filename_extension, "")
-        self.assertEqual(info.subdir, "subdir1/subdir2")
-
-    def test_cache_in_top_dir(self):
-        cache_file_name = "tmp_sm12345low_title56789.avi.mp4"
-        info = VideoCacheInfo.create_from_relpath(
-            cache_file_name, rootdir="./cache/")
-
-        self.assertEqual(info.video_id, "sm12345")
-        self.assertEqual(info.tmp, True)
-        self.assertEqual(info.low, True)
-        self.assertEqual(info.title, "title56789.avi")
-        self.assertEqual(info.filename_extension, "mp4")
-        self.assertEqual(info.subdir, "")
-
-    def test__make_cache_file_path(self):
-        cache_file_name = "subdir1/subdir2/tmp_sm12345low_title56789.avi.mp4"
-        info = VideoCacheInfo.create_from_relpath(
-            cache_file_name, rootdir="./cache/")
-        cachefilepath = VideoCacheInfo.make_cache_file_path(info)
-
-        self.assertEqual(
-            os.path.normpath(cachefilepath),
-            os.path.normpath(os.path.join("./cache/", cache_file_name)))
-
-    def test__match(self):
-        cache_file_name = "subdir1/subdir2/tmp_sm12345low_title56789.avi.mp4"
-        info = VideoCacheInfo.create_from_relpath(
-            cache_file_name, rootdir="./cache/")
-        query_info = VideoCacheInfo.make_query(
-            video_id="sm12345", rootdir="./cache/")
-
-        self.assertTrue(query_info.match(info))
-
-    def test__match__not_match(self):
-        cache_file_name = "subdir1/subdir2/tmp_sm12345low_title56789.avi.mp4"
-        info = VideoCacheInfo.create_from_relpath(
-            cache_file_name, rootdir="./cache/")
-        query_info = VideoCacheInfo.make_query(
-            video_id="sm12345", low=False, rootdir="./cache/")
-
-        self.assertFalse(query_info.match(info))
-
-
-class NicoCacheTestCase(unittest.TestCase):
-
-    def make_cache_file_path(self, filename):
-        return os.path.join(root_test_dir_path, self.__class__.__name__, filename)
-
-    def make_testdir(self):
-        self.rm_testdir()
-        os.makedirs(os.path.join(root_test_dir_path, self.__class__.__name__))
-
-    def makedir(self, dirname):
-        os.makedirs(
-            os.path.join(root_test_dir_path, self.__class__.__name__, dirname))
-
-    def make_file(self, filename):
-        with open(os.path.join(root_test_dir_path, self.__class__.__name__, filename), "w"):
-            pass
-
-    def rm_testdir(self):
-        shutil.rmtree(
-            os.path.join(root_test_dir_path, self.__class__.__name__), ignore_errors=True)
-
-#     def get_real_path(self, path):
-# return os.path.join(root_test_dir_path, self.__class__.__name__,  path)
-
-    def get_testdir_path(self):
-        return os.path.join(root_test_dir_path, self.__class__.__name__)
-
-
-class TestVideoCacheManager(NicoCacheTestCase):
-
-    def setUp(self):
-        self.rm_testdir()
-
-        self.make_testdir()
-        self.makedir("subdir1")
-        self.makedir("subdir2")
-
-        self.make_file("tmp_sm10low_てすと.mp4")
-        self.make_file("subdir1/tmp_so20low_タイトル.avi.mp4")
-
-        self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
-
-        self.video_cache_manager = VideoCacheManager(
-            pathutil.FileSystemWrapper())
-
-
-#     def test__get_video_cache_filepath__topdir(self):
-#         filepath = self.video_cache_manager.\
-#             get_video_cache_filepath("sm10")
-#
-#         self.assertEqual(os.path.basename(filepath), "sm10.mp4")
-
-    def test__create_new_cache(self):
-        video_cache_info = VideoCacheInfo.create_from_relpath(
-            "tmp_sm12345low_タイトル.mp4", rootdir=self.get_testdir_path())
-        filepath = video_cache_info.make_cache_file_path()
-
-        self.video_cache_manager.create_new_cache(video_cache_info)
-
-        self.assertTrue(os.path.exists(filepath))
-
-    def test__update_cache_info(self):
-        video_cache_info = VideoCacheInfo.create_from_relpath(
-            "tmp_sm10low_てすと.mp4", rootdir=self.get_testdir_path())
-        oldfilepath = video_cache_info.make_cache_file_path()
-
-        new_video_cache_info = VideoCacheInfo.create_from_relpath(
-            "tmp_sm12345low_タイトル.mp4", rootdir=self.get_testdir_path())
-        filepath = new_video_cache_info.make_cache_file_path()
-
-        self.video_cache_manager.update_cache_info(
-            video_cache_info, new_video_cache_info)
-
-        self.assertTrue(os.path.exists(filepath))
-
-        self.assertFalse(os.path.exists(oldfilepath))
-
-    def test__create_new_file__already_exist_error(self):
-        video_cache_info = VideoCacheInfo.create_from_relpath(
-            "tmp_sm10low_てすと.mp4", rootdir=self.get_testdir_path())
-
-        with self.assertRaises(self.video_cache_manager.AlreadyExistsError):
-            self.video_cache_manager.create_new_cache(video_cache_info)
-
-    def test__get_cache_list(self):
-        video_cache_info = VideoCacheInfo.make_query(
-            video_id="so20", rootdir=self.get_testdir_path())
-        video_cache_info_list = self.video_cache_manager.get_cache_list(
-            video_cache_info)
-        self.assertEqual(len(video_cache_info_list), 2)
-
-        for video_cache_info in video_cache_info_list:
-            self.assertEqual(video_cache_info.video_id, "so20")
-
-    def test__remove_cache(self):
-        video_cache_info = VideoCacheInfo.create_from_relpath(
-            "subdir1/tmp_so20low_タイトル.avi.mp4",
-            rootdir=self.get_testdir_path())
-        self.video_cache_manager.remove_cache(video_cache_info)
-
-        video_cache_info = VideoCacheInfo.create_from_relpath(
-            "subdir2/tmp_so20low_タイトル.avi.mp4",
-            rootdir=self.get_testdir_path())
-        self.video_cache_manager.remove_cache(video_cache_info)
-
-        query_info = VideoCacheInfo.make_query(
-            video_id="so20", rootdir=self.get_testdir_path())
-
-        self.assertEqual(
-            len(self.video_cache_manager.get_cache_list(query_info)), 0)
-
-    def test__touch(self):
-
-        video_cache_info = VideoCacheInfo.create_from_relpath(
-            "subdir1/tmp_so20low_タイトル.avi.mp4",
-            rootdir=self.get_testdir_path())
-
-        mtime0 = self.video_cache_manager.get_mtime(video_cache_info)
-
-        self.video_cache_manager.touch(video_cache_info)
-
-        mtime1 = self.video_cache_manager.get_mtime(video_cache_info)
-
-        self.assertTrue(mtime1 > mtime0)
-
-
-# def test():
-#     if os.path.exists(root_test_dir_path):
-#         shutil.rmtree(root_test_dir_path)
-#     os.mkdir(root_test_dir_path)
-#     unittest.main()
-# if __name__ == "__main__":
-#     test()
+        new_video_cache_info = self._video_cache_info.replace(tmp=False)
+        self.update_cache_info(new_video_cache_info)
