@@ -261,9 +261,15 @@ class VideoCache:
         self._filesystem_wrapper = filesystem_wrapper
         self._video_cache_info = video_cache_info
 
+        self._removed = False
+
     @property
     def info(self):
         return self._video_cache_info
+
+    @property
+    def removed(self):
+        return self._removed
 
     def exists(self):
         return os.path.exists(self._video_cache_info.make_cache_file_path())
@@ -276,6 +282,8 @@ class VideoCache:
 
         with self._filesystem_wrapper.open(cache_file_path, mode="wb"):
             pass
+
+        self._removed = False
 
     def open(self, readonly=False):
         cache_file_path = self._video_cache_info.make_cache_file_path()
@@ -306,6 +314,8 @@ class VideoCache:
             raise NoSuchCacheError(self._video_cache_info)
         self._filesystem_wrapper.remove(
             self._video_cache_info.make_cache_file_path())
+
+        self._removed = True
 
     def get_mtime(self):
         if not self.exists():

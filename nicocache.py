@@ -46,6 +46,7 @@ import libnicocache
 from libnicocache.filecachetool import CachingReader
 from libnicocache.utility import get_partial_http_resource
 from libnicovideo import ThumbInfo
+import weakref
 logger = _logging.getLogger("nicocache.py")
 # logger.setLevel(_logging.DEBUG)
 logger.info("nicocache.py")
@@ -150,12 +151,28 @@ def guess_filename_extension(mimetype):
 class VideoCacheManager(object):
 
     """NicoCacheのプロセスが起動中、
-    一つのvideo_num(video_cache_info)に対応するVideoCacheオブジェクトは
-    プロセス内に1つしか存在しないことを保証する"""
+    ファイルシステム上のキャッシュファイルに対応するVideoCacheオブジェクトは
+    プロセス内に1つしか存在しないことを保証する
+    """
 
     def __init__(self, FileSystemWrapperClass, VideoCacheClass=VideoCache):
         self._filesystem_wrapper = FileSystemWrapperClass()
         self._VideoCacheClass = VideoCacheClass
+
+        # {video_cache_info: video_cache} なるdict
+        self._weak_cacheobj_dict = weakref.WeakValueDictionary()
+
+    def _get_cacheobj_from_weak_dick(self, video_cache):
+        """video_cacheが弱参照辞書にあったらそれをかえす
+        なかったら、video_cacheを弱参照辞書に登録してからvideo_cacheを返す"""
+        # todo!!!ここの処理は複雑なので、デバッグログを残す
+        video_cache_in_dick = self._weak_cacheobj_dict.get(
+            video_cache.info, None)
+        if video_cache_in_dick is None:
+            self._weak_cacheobj_dict[video_cache.info] = video_cache
+            video_cache_in_dick = video_cache
+
+        return video_cache_in_dick
 
     def get(self, rootdir, video_num, **kwargs):
         cache_list = self.get_cache_list(rootdir, video_num, **kwargs)
@@ -167,17 +184,29 @@ class VideoCacheManager(object):
             return cache_list[0]
 
     def get_cache_list(self, rootdir, video_num, **kwargs):
+        """与えられたvideo_num(部分的なvideo_cache_info)にマッチする
+        ファイルシステム上のキャッシュファイルに対応するVideoCacheオブジェクトを返す(listで)
+        マッチした数 == listの長さ
+
+        ファイルシステム上のキャッシュファイルに対応するVideoCacheオブジェクトは
+    プロセス内に1つしか存在しないことを保証する
+        """
         video_cache_info_query = libnicocache.VideoCacheInfo.make_query(
             rootdir=rootdir, video_num=video_num, **kwargs)
 
         cache_list = self._VideoCacheClass.get_cache_list(
             self._filesystem_wrapper, video_cache_info_query)
+        cache_list2 = []
+        for video_cache in cache_list:
+            cache_list2.append(self._get_cacheobj_from_weak_dick(video_cache))
 
-        return cache_list
+        return cache_list2
 
     def lazy_create(self, video_cache_info):
-        return self._VideoCacheClass(
+        video_cache = self._VideoCacheClass(
             self._filesystem_wrapper, video_cache_info)
+
+        return self._get_cacheobj_from_weak_dick(video_cache)
 
     def create(self, video_cache_info):
         video_cache = self.lazy_create(video_cache_info)
@@ -698,7 +727,7 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
         logs = []
 
         for cache_info in saved_cache_info_list:
-            log = ("%s %s %s\n" %
+            log = ("%s %s: %s\n" %
                    (command, thumbinfo.video_id,
                     cache_info.make_cache_file_path()))
 
@@ -770,7 +799,7 @@ def main():
     video_cache_manager = VideoCacheManager(
         libnicocache.pathutil.FileSystemWrapper)
     video_cache_operator = VideoCacheOperator(
-        video_cache_manager, rootdir="cache")
+        video_cache_manager, rootdir=cache_dir_path)
 
     logger.info("finish making video cache file path table")
 

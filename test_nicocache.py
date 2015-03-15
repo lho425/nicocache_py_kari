@@ -236,6 +236,36 @@ class TestSocketWrapperMock(unittest.TestCase):
         self.assertEqual(res.body, "a" * 100 + "b" * 100)
 
 
+class VideoCacheManager(NicoCacheTestCase):
+
+    def setUp(self):
+        self.rm_testdir()
+
+        self.make_testdir()
+        self.makedir("subdir1")
+        self.makedir("subdir2")
+
+        self.makedir("save")
+
+        self.make_file("tmp_sm9low")
+        self.make_file("tmp_sm10low_てすと.mp4")
+        self.make_file("subdir1/tmp_so20low_タイトル.avi.mp4")
+
+        self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
+
+        self.video_cache_manager = nicocache.VideoCacheManager(
+            libnicocache.pathutil.FileSystemWrapper, libnicocache.VideoCache)
+
+    def test(self):
+        video_cache1 = self.video_cache_manager.get(
+            rootdir=self.testdir_path, video_num="9")
+
+        video_cache2 = self.video_cache_manager.get(
+            rootdir=self.testdir_path, video_num="9")
+
+        self.assertTrue(video_cache1 is video_cache2)
+
+
 class TestVideoCacheOperator(NicoCacheTestCase):
 
     def setUp(self):
@@ -263,6 +293,7 @@ class TestVideoCacheOperator(NicoCacheTestCase):
         info_list = self.video_cache_operator.save_cache(
             video_num="9", subdir="save", title="てすと", filename_extension="mp4",
             video_id="so9")
+        raise NotImplementedError("test__save_cache")
 
 
 class TestVideoCacheOperator_caching(NicoCacheTestCase):
