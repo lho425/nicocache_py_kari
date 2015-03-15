@@ -301,11 +301,23 @@ class VideoCacheOperator:
         saved_cache_info_list = []
         for video_cache in video_cache_list:
             if query.match(video_cache.info):
+                def command():
+                    video_cache.update_cache_info(new_video_cache_info)
+                    self._logger.info(
+                        "save cache: %s",
+                        video_cache.info.make_cache_file_path())
+                command.name = ("save " +
+                                video_cache.info.make_cache_file_path())
+                try:
+                    command()
+                except:
+                    self._logger.info("command failed: %s", command.name)
+                    if not hasattr(video_cache, "on_close_commands"):
+                        video_cache.on_close_commands = []
+                    video_cache.on_close_commands.append(command)
+                    continue
 
-                video_cache.update_cache_info(new_video_cache_info)
                 saved_cache_info_list.append(video_cache.info)
-                self._logger.info(
-                    "save cache: %s", video_cache.info.make_cache_file_path())
 
         return saved_cache_info_list
 
@@ -523,6 +535,14 @@ class VideoCacheOperator:
                 self._logger.info("cache completed: " + self.videofilename)
             else:
                 self._logger.info("suspended: " + self.videofilename)
+
+            # oh my god!
+            # windowsだとopen中のファイルに対するremove/renameが失敗するからといってこれは…
+            # もっとシンプルに出来ないんでしょうか
+            if hasattr(self._video_cache, "on_close_commands"):
+                for command in self._video_cache.on_close_commands:
+                    self._logger.info("on close command: %s", command.name)
+                    command()
 
         def __del__(self):
             try:
