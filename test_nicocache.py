@@ -305,15 +305,14 @@ class TestVideoCacheOperator_caching(NicoCacheTestCase):
         self.makedir("subdir1")
         self.makedir("subdir2")
 
-        self.make_file("tmp_sm10low_てすと.mp4")
         self.make_file("subdir1/tmp_so20low_タイトル.avi.mp4")
 
         self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
 
-        with open(self.get_real_path("sm8_ニコキャッシュpyテストsm8.mp4"), "wb") as f:
+        with open(self.get_real_path("subdir1/sm8_ニコキャッシュpyテストsm8.mp4"), "wb") as f:
             f.write("a" * 100 + "b" * 200)
 
-        with open(self.get_real_path("tmp_sm10_ニコキャッシュpyテストsm10.mp4"), "wb") as f:
+        with open(self.get_real_path("subdir1/tmp_sm10_ニコキャッシュpyテストsm10.mp4"), "wb") as f:
             f.write("a" * 100)
 
         video_cache_manager = nicocache.VideoCacheManager(

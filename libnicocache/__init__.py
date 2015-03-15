@@ -199,9 +199,12 @@ class VideoCacheInfo(_VideoCacheInfo):
     def match(self, video_cache_info):
         """selfとvideo_cache_infoの持つパラメタを比較し、すべて一致していたらTureを返す.
         ただし、selfのパラメタの値がNoneだった場合、そのパラメタの比較はスキップされる.
-        つまり、selfのパラメタの値がすべてNoneｓだった場合、任意のvideo_cache_infoにマッチする.
+        つまり、selfのパラメタの値がすべてNoneだった場合、任意のvideo_cache_infoにマッチする.
         if VideoCacheInfo.make_query(...).match(video_cache_info):
-        みたいな感じで使う."""
+        みたいな感じで使う.
+
+        rootdir, subdirの比較は、文字列の比較はななく、
+        同じファイルを指すpathかどうかで比較する"""
         # 正規表現のpattern.match("abcde")みたいなapiを模倣している.
         # a は条件にマッチする
         # a.matches(query)
@@ -209,6 +212,16 @@ class VideoCacheInfo(_VideoCacheInfo):
         # query.match(a)の方がapiとしては自然な感じがする(あくまで主観)
         # 混乱を招くようならlet's discuss
         self_asdict = self._asdict()
+        for key in ("rootdir", "subdir"):
+            try:
+                if self_asdict[key] is None:
+                    continue
+                if (os.path.normpath(getattr(video_cache_info, key))
+                        != os.path.normpath(self_asdict[key])):
+                    return False
+            finally:
+                del self_asdict[key]
+
         for key in self_asdict:
             if self_asdict[key] is None:
                 continue
@@ -237,14 +250,16 @@ class VideoCache:
             cls, filesystem_wrapper, video_cache_info_query, recursive=True):
 
         video_cache_list = []
-        rootdir = video_cache_info_query.rootdir
+        # あとでsubdirを取り出すのに備えて正規化しておく
+        rootdir = os.path.normpath(video_cache_info_query.rootdir)
         walk_iterator = filesystem_wrapper.walk(
             rootdir, followlinks=True)
         if not recursive:
             walk_iterator = [next(walk_iterator)]
 
         for dirpath, _, filenames in walk_iterator:
-            subdirpath = dirpath[len(rootdir):]  # rootdirの部分だけ取り除く
+            dirpath = os.path.normpath(dirpath)
+            subdirpath = dirpath[(len(rootdir) + 1):]  # "rootdir/"の部分だけ取り除く
             for filename in filenames:
                 # classがわからないので(VideoCacheInfoクラスを決め打ちしたくない)
                 # インスタンスからクラスメソッドを呼んでいる
