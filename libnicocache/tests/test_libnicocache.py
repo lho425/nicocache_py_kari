@@ -12,10 +12,14 @@ import proxtheta
 from proxtheta.core import iowrapper
 import proxtheta.utility
 from nicocache import NicoCache
+from ..__init__ import libnicocache
+from .. import pathutil, VideoCacheManager
+
+from . import test_base
+from .. import base
+from ..base import VideoCache
 
 import logging as _logging
-import libnicocache
-from libnicocache import test_libnicocache
 _logging.basicConfig(
     format="%(levelname)s:%(name)s: %(message)s")
 
@@ -38,7 +42,7 @@ class util:
             pass
 
 
-NicoCacheTestCase = test_libnicocache.NicoCacheTestCase
+NicoCacheTestCase = test_base.NicoCacheTestCase
 
 
 # class Test_get_pathlist(unittest.TestCase):
@@ -236,7 +240,7 @@ class TestSocketWrapperMock(unittest.TestCase):
         self.assertEqual(res.body, "a" * 100 + "b" * 100)
 
 
-class VideoCacheManager(NicoCacheTestCase):
+class TestVideoCacheManager(NicoCacheTestCase):
 
     def setUp(self):
         self.rm_testdir()
@@ -253,8 +257,8 @@ class VideoCacheManager(NicoCacheTestCase):
 
         self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
 
-        self.video_cache_manager = nicocache.VideoCacheManager(
-            libnicocache.pathutil.FileSystemWrapper, libnicocache.VideoCache)
+        self.video_cache_manager = VideoCacheManager(
+            pathutil.FileSystemWrapper, base.VideoCache)
 
     def test(self):
         video_cache1 = self.video_cache_manager.get(
@@ -283,8 +287,8 @@ class TestVideoCacheOperator(NicoCacheTestCase):
 
         self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
 
-        video_cache_manager = nicocache.VideoCacheManager(
-            libnicocache.pathutil.FileSystemWrapper, libnicocache.VideoCache)
+        video_cache_manager = VideoCacheManager(
+            pathutil.FileSystemWrapper, VideoCache)
 
         self.video_cache_operator = nicocache.VideoCacheOperator(
             video_cache_manager, rootdir=self.testdir_path, logger=logger_for_test)
@@ -315,8 +319,8 @@ class TestVideoCacheOperator_caching(NicoCacheTestCase):
         with open(self.get_real_path("subdir1/tmp_sm10_ニコキャッシュpyテストsm10.mp4"), "wb") as f:
             f.write("a" * 100)
 
-        video_cache_manager = nicocache.VideoCacheManager(
-            libnicocache.pathutil.FileSystemWrapper, libnicocache.VideoCache)
+        video_cache_manager = VideoCacheManager(
+            pathutil.FileSystemWrapper, VideoCache)
 
         self._original_create_sockfile = proxtheta.utility.client.create_sockfile
         proxtheta.utility.client.create_sockfile = create_sockfile

@@ -6,9 +6,9 @@ import shutil
 import logging as _logging
 import io
 
-from __init__ import VideoCacheInfo, VideoCache, CacheAlreadyExistsError
-from __init__ import pathutil
-from .filecachetool import CachingReader
+from ..base import VideoCacheInfo, VideoCache, CacheAlreadyExistsError
+from .. import pathutil
+from ..filecachetool import CachingReader
 
 verbosity = 1
 root_test_dir_path = "./_testdir"
