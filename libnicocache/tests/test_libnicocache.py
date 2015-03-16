@@ -12,7 +12,6 @@ import proxtheta
 from proxtheta.core import iowrapper
 import proxtheta.utility
 from nicocache import NicoCache
-from ..__init__ import libnicocache
 from .. import pathutil, VideoCacheManager
 
 from . import test_base
@@ -297,7 +296,10 @@ class TestVideoCacheOperator(NicoCacheTestCase):
         info_list = self.video_cache_operator.save_cache(
             video_num="9", subdir="save", title="てすと", filename_extension="mp4",
             video_id="so9")
-        raise NotImplementedError("test__save_cache")
+        video_cache_info = self.video_cache_operator.get_video_cache_info(
+            video_num="9", low=True)
+
+        self.assertEqual(video_cache_info.subdir, "save")
 
 
 class TestVideoCacheOperator_caching(NicoCacheTestCase):

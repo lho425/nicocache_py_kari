@@ -295,6 +295,22 @@ class VideoCacheOperator:
 #
 #         return video_cache.info
 
+    def _execute_command(self, video_cache, command):
+        """def command(): => any_type
+        return: status_str
+        commandが例外を投げる場合、video_cacheのon_close_commandsに予約される"""
+        try:
+            command()
+        except:
+            self._logger.info("command failed: %s", command.name)
+            if not hasattr(video_cache, "on_close_commands"):
+                video_cache.on_close_commands = []
+            video_cache.on_close_commands.append(command)
+
+            return "reserved"
+
+        return "success"
+
     def save_cache(
             self, video_num, subdir, title=None, filename_extension=None,
             video_id=None):
@@ -303,13 +319,15 @@ class VideoCacheOperator:
             filename_extension=filename_extension, title=title, subdir=subdir,
             video_id=video_id)
 
-        query = VideoCacheInfo.make_query(rootdir=self._rootdir, subdir="")
+        # rootdir直下にあるかのクエリ
+        query_directly_under_rootdir = VideoCacheInfo.make_query(
+            rootdir=self._rootdir, subdir="")
 
         video_cache_list = self._get_video_cache_list(video_num)
 
         saved_cache_info_list = []
         for video_cache in video_cache_list:
-            if query.match(video_cache.info):
+            if query_directly_under_rootdir.match(video_cache.info):
                 def command():
                     video_cache.update_cache_info(new_video_cache_info)
                     self._logger.info(
@@ -317,14 +335,8 @@ class VideoCacheOperator:
                         video_cache.info.make_cache_file_path())
                 command.name = ("save " +
                                 video_cache.info.make_cache_file_path())
-                try:
-                    command()
-                except:
-                    self._logger.info("command failed: %s", command.name)
-                    if not hasattr(video_cache, "on_close_commands"):
-                        video_cache.on_close_commands = []
-                    video_cache.on_close_commands.append(command)
-                    continue
+
+                status_str = self._execute_command(video_cache, command)
 
                 saved_cache_info_list.append(video_cache.info)
 
@@ -351,6 +363,20 @@ class VideoCacheOperator:
             video_num=video_num, low=low, tmp=True)
 
         return self._video_cache_manager.create(video_cache_info)
+
+    def get_video_cache_info_list(self, video_num, rootdir=None):
+        video_cache_list = self._get_video_cache_list(video_num, rootdir)
+
+        video_cache_info_list = [
+            video_cache.info for video_cache in video_cache_list]
+        return video_cache_info_list
+
+    def get_video_cache_info(self, video_num, low, rootdir=None):
+        video_cache = self._get_video_cache(video_num, low, rootdir)
+        if video_cache is None:
+            return None
+
+        return video_cache.info
 
     def _make_http_video_resource_with_comlete_localcache(
             self, video_cache, server_sockfile):

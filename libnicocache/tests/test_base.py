@@ -78,7 +78,8 @@ class TestVideoCacheInfo(unittest.TestCase):
         self.assertEqual(info.low, True)
         self.assertEqual(info.title, "title56789.avi")
         self.assertEqual(info.filename_extension, "mp4")
-        self.assertEqual(info.subdir, "")
+        # infoのsubdir,rootdirのpathは自動的に正規化されるので、注意!
+        self.assertEqual(info.subdir, os.path.normpath(""))
 
     def test__make_cache_file_path(self):
         cache_file_name = "subdir1/subdir2/tmp_sm12345low_title56789.avi.mp4"
