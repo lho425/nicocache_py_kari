@@ -141,7 +141,8 @@ class VideoCacheInfo(_VideoCacheInfo):
         filename_extension = filename_extension[1:]  # 拡張子に.が含まれてしまうため
         m = cls.pattern.match(filename)
         if not m:
-            raise RuntimeError("VideoCacheInfo parse error")
+            raise VideoCacheInfoParameterError(
+                "cannot parse filename: %s" % filename)
 
         if m.group("tmp"):
             tmp = True
