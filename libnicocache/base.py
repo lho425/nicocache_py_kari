@@ -79,7 +79,8 @@ class VideoCacheInfo(_VideoCacheInfo):
             filename_extension, title, subdir, rootdir)
 
     @classmethod
-    def create(cls, rootdir, video_type=None, video_num=None, video_id=None, tmp=False, low=False,
+    def create(cls, rootdir, video_type=None, video_num=None, video_id=None,
+               tmp=False, low=False,
                filename_extension="", title="", subdir=""):
         if video_id is not None:
             video_type = video_id[:2]
@@ -120,6 +121,12 @@ class VideoCacheInfo(_VideoCacheInfo):
         return cls(video_type, video_num, tmp, low, filename_extension, title, subdir, rootdir)
 
     def replace(self, **kwargs):
+        video_id = kwargs.get("video_id", None)
+        if video_id is not None:
+            kwargs["video_type"] = video_id[:2]
+            kwargs["video_num"] = video_id[2:]
+            del kwargs["video_id"]
+
         return self._replace(**kwargs)
 
     def update(self, new_video_cache_info):
@@ -249,34 +256,7 @@ class NoSuchCacheError(Exception):
         Exception.__init__(self, mes)
 
 
-class VideoCache:
-
-    @classmethod
-    def get_cache_list(
-            cls, filesystem_wrapper, video_cache_info_query, recursive=True):
-
-        video_cache_list = []
-        # あとでsubdirを取り出すのに備えて正規化しておく
-        rootdir = os.path.normpath(video_cache_info_query.rootdir)
-        walk_iterator = filesystem_wrapper.walk(
-            rootdir, followlinks=True)
-        if not recursive:
-            walk_iterator = [next(walk_iterator)]
-
-        for dirpath, _, filenames in walk_iterator:
-            dirpath = os.path.normpath(dirpath)
-            subdirpath = dirpath[(len(rootdir) + 1):]  # "rootdir/"の部分だけ取り除く
-            for filename in filenames:
-                # classがわからないので(VideoCacheInfoクラスを決め打ちしたくない)
-                # インスタンスからクラスメソッドを呼んでいる
-                a_video_cache_info = video_cache_info_query.\
-                    create_from_filename(
-                        filename, subdir=subdirpath, rootdir=rootdir)
-                if video_cache_info_query.match(a_video_cache_info):
-                    video_cache = cls(filesystem_wrapper, a_video_cache_info)
-                    video_cache_list.append(video_cache)
-
-        return video_cache_list
+class VideoCacheFile:
 
     def __init__(self, filesystem_wrapper, video_cache_info):
         self._filesystem_wrapper = filesystem_wrapper
@@ -299,27 +279,42 @@ class VideoCache:
             pass
 
     def open(self, readonly=False):
+        """必ずファイル位置は先頭になる.
+        readonly=Falseのとき、キャッシュが存在していなかったら新規作成される"""
         cache_file_path = self._video_cache_info.make_cache_file_path()
 
         if readonly:
             mode = "rb"
+            return self._filesystem_wrapper.open(cache_file_path, mode)
         else:
-            mode = "r+b"
-
-        return self._filesystem_wrapper.open(cache_file_path, mode)
+            # discuss!!! このやり方は時間差でファイルが作られたり消されたりした場合に例外を投げたり、
+            # 不可解な挙動をする可能性がある
+            # truncateしない"w+b"モードができればいいんだが…
+            # 誰か知恵を貸して
+            if self.exists():
+                mode = "r+b"
+            else:
+                mode = "w+b"
+            return self._filesystem_wrapper.open(cache_file_path, mode)
 
     def update_cache_info(self, new_video_cache_info):
-
+        """キャッシュが存在していなかった場合内部のvideo_cache_infoの更新のみ行います"""
+        # しかし時間差でrenameが失敗するのが恐い
+        # todo!!! filesystem_wrapper側で投げる例外をwinとposixで統一する
         new_video_cache_info = self._video_cache_info.update(
             new_video_cache_info)
         oldpath = self._video_cache_info.make_cache_file_path()
         newpath = new_video_cache_info.make_cache_file_path()
 
-        self._filesystem_wrapper.rename(oldpath, newpath)
+        if self.exists():
+            self._filesystem_wrapper.rename(oldpath, newpath)
 
         self._video_cache_info = new_video_cache_info
 
     def get_size(self):
+        if not self.exists():
+            return 0
+
         return os.path.getsize(self._video_cache_info.make_cache_file_path())
 
     def remove(self):

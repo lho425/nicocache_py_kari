@@ -6,7 +6,7 @@ import shutil
 import logging as _logging
 import io
 
-from ..base import VideoCacheInfo, VideoCache, CacheAlreadyExistsError
+from ..base import VideoCacheInfo, VideoCacheFile, CacheAlreadyExistsError
 from .. import pathutil
 from ..filecachetool import CachingReader
 
@@ -136,13 +136,13 @@ class NicoCacheTestCase(unittest.TestCase):
             os.path.join(root_test_dir_path, self.__class__.__name__), ignore_errors=True)
 
     def get_real_path(self, path):
-        return os.path.join(root_test_dir_path, self.__class__.__name__,  path)
+        return os.path.join(root_test_dir_path, self.__class__.__name__, path)
 
     def get_testdir_path(self):
         return os.path.join(root_test_dir_path, self.__class__.__name__)
 
 
-class TestVideoCacheManager(NicoCacheTestCase):
+class TestVideoCacheFile(NicoCacheTestCase):
 
     def setUp(self):
         self.rm_testdir()
@@ -170,7 +170,7 @@ class TestVideoCacheManager(NicoCacheTestCase):
             "tmp_sm12345low_タイトル.mp4", rootdir=self.get_testdir_path())
         filepath = video_cache_info.make_cache_file_path()
 
-        video_cache = VideoCache(self.filesystem_wrapper, video_cache_info)
+        video_cache = VideoCacheFile(self.filesystem_wrapper, video_cache_info)
 
         video_cache.create()
 
@@ -183,7 +183,7 @@ class TestVideoCacheManager(NicoCacheTestCase):
         new_video_cache_info = VideoCacheInfo.create_from_relpath(
             "tmp_sm12345low_タイトル.mp4", rootdir=self.get_testdir_path())
 
-        video_cache = VideoCache(self.filesystem_wrapper, video_cache_info)
+        video_cache = VideoCacheFile(self.filesystem_wrapper, video_cache_info)
 
         video_cache.update_cache_info(new_video_cache_info)
 
@@ -196,42 +196,22 @@ class TestVideoCacheManager(NicoCacheTestCase):
     def test__create_new_file__already_exist_error(self):
         video_cache_info = VideoCacheInfo.create_from_relpath(
             "tmp_sm10low_てすと.mp4", rootdir=self.get_testdir_path())
-        video_cache = VideoCache(self.filesystem_wrapper, video_cache_info)
+        video_cache = VideoCacheFile(self.filesystem_wrapper, video_cache_info)
 
         with self.assertRaises(CacheAlreadyExistsError):
             video_cache.create()
-
-    def test__get_cache_list(self):
-        video_cache_info = VideoCacheInfo.make_query(
-            video_id="so20", rootdir=self.get_testdir_path())
-        video_cache_list = VideoCache.get_cache_list(
-            self.filesystem_wrapper, video_cache_info)
-        self.assertEqual(len(video_cache_list), 2)
-
-        for video_cache in video_cache_list:
-            self.assertEqual(video_cache.info.video_id, "so20")
 
     def test__remove_cache(self):
         video_cache_info = VideoCacheInfo.create_from_relpath(
             "subdir1/tmp_so20low_タイトル.avi.mp4",
             rootdir=self.get_testdir_path())
-        video_cache = VideoCache(self.filesystem_wrapper, video_cache_info)
+        video_cache = VideoCacheFile(self.filesystem_wrapper, video_cache_info)
+
+        self.assertTrue(video_cache.exists())
 
         video_cache.remove()
 
-        video_cache_info = VideoCacheInfo.create_from_relpath(
-            "subdir2/tmp_so20low_タイトル.avi.mp4",
-            rootdir=self.get_testdir_path())
-        video_cache = VideoCache(self.filesystem_wrapper, video_cache_info)
-
-        video_cache.remove()
-
-        query_info = VideoCacheInfo.make_query(
-            video_id="so20", rootdir=self.get_testdir_path())
-
-        self.assertEqual(
-            len(VideoCache.get_cache_list(
-                self.filesystem_wrapper, query_info)), 0)
+        self.assertFalse(video_cache.exists())
 
     def test__touch(self):
 
@@ -239,7 +219,7 @@ class TestVideoCacheManager(NicoCacheTestCase):
             "subdir1/tmp_so20low_タイトル.avi.mp4",
             rootdir=self.get_testdir_path())
 
-        video_cache = VideoCache(self.filesystem_wrapper, video_cache_info)
+        video_cache = VideoCacheFile(self.filesystem_wrapper, video_cache_info)
 
         mtime0 = video_cache.get_mtime()
 

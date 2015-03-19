@@ -24,7 +24,10 @@ class FileSystemWrapper(object):
         os.remove(path)
 
     def open(self, path, mode="rb"):
-        return open(path, mode)
+        try:
+            return open(path, mode)
+        except IOError as e:
+            raise IOError(e.errno, e, mode)
 
     def getmtime(self, path):
         return os.path.getmtime(path)

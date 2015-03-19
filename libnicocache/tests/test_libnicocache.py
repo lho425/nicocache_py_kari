@@ -11,18 +11,18 @@ import proxtheta.core.common
 import proxtheta
 from proxtheta.core import iowrapper
 import proxtheta.utility
-from nicocache import NicoCache
-from .. import pathutil, VideoCacheManager
+from .. import pathutil, VideoCacheFileManager
 
 from . import test_base
 from .. import base
-from ..base import VideoCache
+from ..base import VideoCacheFile
 
 import logging as _logging
+from .. import VideoCacheManager, VideoCache
+from ..base import VideoCacheInfo
 _logging.basicConfig(
     format="%(levelname)s:%(name)s: %(message)s")
 
-import nicocache
 
 logger_for_test = _logging.getLogger("test")
 # logger_for_test.addHandler(_logging.NullHandler())
@@ -239,7 +239,7 @@ class TestSocketWrapperMock(unittest.TestCase):
         self.assertEqual(res.body, "a" * 100 + "b" * 100)
 
 
-class TestVideoCacheManager(NicoCacheTestCase):
+class TestVideoCacheFileManager(NicoCacheTestCase):
 
     def setUp(self):
         self.rm_testdir()
@@ -256,53 +256,53 @@ class TestVideoCacheManager(NicoCacheTestCase):
 
         self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
 
-        self.video_cache_manager = VideoCacheManager(
-            pathutil.FileSystemWrapper, base.VideoCache)
+        self.video_cache_file_manager = VideoCacheFileManager(
+            pathutil.FileSystemWrapper, base.VideoCacheFile)
 
     def test(self):
-        video_cache1 = self.video_cache_manager.get(
-            rootdir=self.testdir_path, video_num="9")
+        video_cache1 = self.video_cache_file_manager.get(
+            VideoCacheInfo.create(rootdir=self.testdir_path, video_num="9"))
 
-        video_cache2 = self.video_cache_manager.get(
-            rootdir=self.testdir_path, video_num="9")
+        video_cache2 = self.video_cache_file_manager.get(
+            VideoCacheInfo.create(rootdir=self.testdir_path, video_num="9"))
 
         self.assertTrue(video_cache1 is video_cache2)
 
 
-class TestVideoCacheOperator(NicoCacheTestCase):
+# class TestVideoCacheOperator(NicoCacheTestCase):
+#
+#     def setUp(self):
+#         self.rm_testdir()
+#
+#         self.make_testdir()
+#         self.makedir("subdir1")
+#         self.makedir("subdir2")
+#
+#         self.makedir("save")
+#
+#         self.make_file("tmp_sm9low")
+#         self.make_file("tmp_sm10low_てすと.mp4")
+#         self.make_file("subdir1/tmp_so20low_タイトル.avi.mp4")
+#
+#         self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
+#
+#         video_cache_file_manager = VideoCacheFileManager(
+#             pathutil.FileSystemWrapper, VideoCacheFile)
+#
+#         self.video_cache_manager = VideoCacheOperator(
+#             video_cache_file_manager, rootdir=self.testdir_path, logger=logger_for_test)
+#
+#     def test__save_cache(self):
+#         info_list = self.video_cache_manager.save_cache(
+#             video_num="9", subdir="save", title="てすと", filename_extension="mp4",
+#             video_id="so9")
+#         video_cache_info = self.video_cache_manager.get_video_cache_info(
+#             video_num="9", low=True)
+#
+#         self.assertEqual(video_cache_info.subdir, "save")
 
-    def setUp(self):
-        self.rm_testdir()
 
-        self.make_testdir()
-        self.makedir("subdir1")
-        self.makedir("subdir2")
-
-        self.makedir("save")
-
-        self.make_file("tmp_sm9low")
-        self.make_file("tmp_sm10low_てすと.mp4")
-        self.make_file("subdir1/tmp_so20low_タイトル.avi.mp4")
-
-        self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
-
-        video_cache_manager = VideoCacheManager(
-            pathutil.FileSystemWrapper, VideoCache)
-
-        self.video_cache_operator = nicocache.VideoCacheOperator(
-            video_cache_manager, rootdir=self.testdir_path, logger=logger_for_test)
-
-    def test__save_cache(self):
-        info_list = self.video_cache_operator.save_cache(
-            video_num="9", subdir="save", title="てすと", filename_extension="mp4",
-            video_id="so9")
-        video_cache_info = self.video_cache_operator.get_video_cache_info(
-            video_num="9", low=True)
-
-        self.assertEqual(video_cache_info.subdir, "save")
-
-
-class TestVideoCacheOperator_caching(NicoCacheTestCase):
+class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
 
     def setUp(self):
         self.rm_testdir()
@@ -320,15 +320,16 @@ class TestVideoCacheOperator_caching(NicoCacheTestCase):
 
         with open(self.get_real_path("subdir1/tmp_sm10_ニコキャッシュpyテストsm10.mp4"), "wb") as f:
             f.write("a" * 100)
-
-        video_cache_manager = VideoCacheManager(
-            pathutil.FileSystemWrapper, VideoCache)
+        filesystem_wrapper = pathutil.FileSystemWrapper()
+        video_cache_file_manager = VideoCacheFileManager(
+            filesystem_wrapper, VideoCacheFile)
 
         self._original_create_sockfile = proxtheta.utility.client.create_sockfile
         proxtheta.utility.client.create_sockfile = create_sockfile
 
-        self.video_cache_operator = nicocache.VideoCacheOperator(
-            video_cache_manager, rootdir=self.testdir_path, logger=logger_for_test)
+        self.video_cache_manager = VideoCacheManager(
+            video_cache_file_manager, filesystem_wrapper,
+            self.testdir_path, VideoCache, logger_for_test)
 
 #         self._original_getthumbinfo = nicocache.getthumbinfo
 #         nicocache.getthumbinfo = getthumbinfo__mock
@@ -347,7 +348,7 @@ class TestVideoCacheOperator_caching(NicoCacheTestCase):
             return proxtheta.utility.client.get_http_resource(
                 (host, 80), req, server_sockfile)
 
-        respack = self.video_cache_operator.make_http_video_resource(
+        respack = self.video_cache_manager.make_http_video_resource(
             req, http_resource_getter_func, None)
 
         data = respack.body_file.read()
@@ -364,7 +365,7 @@ class TestVideoCacheOperator_caching(NicoCacheTestCase):
             return proxtheta.utility.client.get_http_resource(
                 (host, 80), req, server_sockfile)
 
-        respack = self.video_cache_operator.make_http_video_resource(
+        respack = self.video_cache_manager.make_http_video_resource(
             req, http_resource_getter_func, None)
 
         data = respack.body_file.read(60)
@@ -383,7 +384,7 @@ class TestVideoCacheOperator_caching(NicoCacheTestCase):
             return proxtheta.utility.client.get_http_resource(
                 (host, 80), req, server_sockfile)
 
-        respack = self.video_cache_operator.make_http_video_resource(
+        respack = self.video_cache_manager.make_http_video_resource(
             req, http_resource_getter_func, None)
 
         data = respack.body_file.read()
@@ -392,6 +393,43 @@ class TestVideoCacheOperator_caching(NicoCacheTestCase):
 
         respack.close()
 
+
+class TestVideoCacheManager(NicoCacheTestCase):
+
+    def setUp(self):
+        self.rm_testdir()
+
+        self.make_testdir()
+        self.makedir("subdir1")
+        self.makedir("subdir2")
+
+        self.make_file("subdir1/tmp_so20low_タイトル.avi.mp4")
+
+        self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
+
+        with open(self.get_real_path("subdir1/sm8_ニコキャッシュpyテストsm8.mp4"), "wb") as f:
+            f.write("a" * 100 + "b" * 200)
+
+        with open(self.get_real_path("subdir1/tmp_sm10_ニコキャッシュpyテストsm10.mp4"), "wb") as f:
+            f.write("a" * 100)
+        filesystem_wrapper = pathutil.FileSystemWrapper()
+        video_cache_file_manager = VideoCacheFileManager(
+            filesystem_wrapper, VideoCacheFile)
+
+        self.video_cache_manager = VideoCacheManager(
+            video_cache_file_manager, filesystem_wrapper,
+            self.testdir_path, VideoCache, logger_for_test)
+
+    def test__get_video_cache_list(self):
+        video_cache_info = VideoCacheInfo.make_query(
+            video_id="so20", rootdir=self.get_testdir_path())
+        video_cache_list = self.video_cache_manager.get_video_cache_list(
+            video_cache_info)
+
+        self.assertEqual(len(video_cache_list), 2)
+
+        for video_cache in video_cache_list:
+            self.assertEqual(video_cache.info.video_id, "so20")
 
 if __name__ == '__main__':
     unittest.main(verbosity=verbosity)

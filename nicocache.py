@@ -40,24 +40,54 @@ import libnicocache.pathutil
 
 logger = _logging.getLogger("nicocache.py")
 # logger.setLevel(_logging.DEBUG)
-logger.info("nicocache.py")
 
 
-VideoCacheOperator = libnicocache.VideoCacheOperator
+class VideoCacheGuessVideoTypeMixin():
+    MixedClass = None
+
+    def make_http_video_resource(
+            self, req, http_resource_getter_func, server_sockfile):
+        video_type, _, _ = libnicocache.get_videotype_videonum_islow__with_req(
+            req, None)
+
+        self.update_info(video_type=video_type)
+
+        return self.MixedClass.make_http_video_resource(
+            self, req, http_resource_getter_func, server_sockfile)
 
 
-class Extension():
+def makeVideoCacheGuessVideoTypeMixin(VideoCacheClass):
+    class VideoCache(
+            VideoCacheGuessVideoTypeMixin, VideoCacheClass):
+
+        MixedClass = VideoCacheClass
+
+    return VideoCache
+
+VideoCache = makeVideoCacheGuessVideoTypeMixin(libnicocache.VideoCache)
+
+
+class VideoCacheTitleMixin():
+    MixedClass = None
+
+    def make_http_video_resource(
+            self, req, http_resource_getter_func, server_sockfile):
+        raise NotImplementedError
+
+
+class Extension(object):
+    __slots__ = ("name",
+                 "request_filter",
+                 "response_filter",
+                 "response_server", )
 
     def __init__(self, extension_name=None):
         self.name = extension_name
 
-        self.request_filters = []
-        self.request_filters_extend = []
+        self.request_filter = None
+        self.response_filter = None
 
-        self.response_servers = []
-
-        self.response_filters = []
-        self.response_filters_extend = []
+        self.response_server = None
 
 
 class NicoCache(object):
@@ -69,7 +99,7 @@ class NicoCache(object):
             Noneの場合secondary proxyを通さない
             (host, port)が設定されればそこを経由する
         secondary_proxy_addr が Noneでないなら"""
-        self.video_cache_operator = None
+        self.video_cache_manager = None
         self.secondary_proxy_addr = None
         self.nonproxy_camouflage = True
         self.complete_cache = False
@@ -146,14 +176,14 @@ class NicoCache(object):
     @convert_upstream_error
     def handle_video_request(self, req, server_sockfile, info, logger=None):
         logger = (logger if logger is not None else self.logger)
-        video_cache_operator = self.video_cache_operator
+        video_cache_manager = self.video_cache_manager
 
         if (req.host.startswith("smile-") and
                 req.host.endswith(".nicovideo.jp") and
                 req.path == "/smile"):
             # 例えば http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688
 
-            return video_cache_operator.make_http_video_resource(
+            return video_cache_manager.make_http_video_resource(
                 req,
                 http_resource_getter_func=self.get_http_resource,
                 server_sockfile=server_sockfile)
@@ -205,9 +235,9 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
     """とりあえず saveだけ"""
     macher = re.compile("/watch/([^/]+)/(.+)")
 
-    def __init__(self, video_cache_operator):
+    def __init__(self, video_cache_manager):
 
-        self.video_cache_operator = video_cache_operator
+        self.video_cache_manager = video_cache_manager
         proxtheta.utility.server.ResponseServer.__init__(self)
 
     def accept(self, req, info):
@@ -229,23 +259,22 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
 
         thumbinfo = libnicovideo.ThumbInfo(watch_id)
 
-        saved_cache_info_list = self.video_cache_operator.save_cache(
-            video_num=thumbinfo.video_id[2:],
-            subdir="save",
-            video_id=thumbinfo.video_id,
-            title=thumbinfo.title,
-            filename_extension=thumbinfo.movie_type)
-
+        video_cache_pair = self.video_cache_manager.get_video_cache_pair(
+            thumbinfo.video_id[2:])
         logs = []
+        for video_cache in video_cache_pair:
+            if video_cache.exists():
+                status_str = video_cache.update_info(
+                    video_id=thumbinfo.video_id,
+                    title=thumbinfo.title,
+                    filename_extension=thumbinfo.movie_type,
+                    subdir="save")
+                log = ("%s: %s %s\n" %
+                       (status_str, command,
+                        video_cache.info.make_cache_file_path()))
+                logs.append(log)
 
-        for cache_info in saved_cache_info_list:
-            log = ("%s %s: %s\n" %
-                   (command, thumbinfo.video_id,
-                    cache_info.make_cache_file_path()))
-
-            logs.append(log)
-
-        res_body = "NicoCacheAPI command success: \n" + ''.join(logs)
+        res_body = "NicoCacheAPI command results: \n" + ''.join(logs)
 
         logger.info(res_body)
         res.body = res_body.decode(
@@ -305,17 +334,20 @@ def main():
     if not os.path.isdir(save_dir_path):
         os.mkdir(save_dir_path)
 
-    logger.info("making video cache file path table")
+    logger.info("initializing")
 
     # ファクトリやらシングルトンやらの初期化
+    filesystem_wrapper = libnicocache.pathutil.FileSystemWrapper()
+    video_cache_file_manager = libnicocache.VideoCacheFileManager(
+        filesystem_wrapper, libnicocache.VideoCacheFile)
+
     video_cache_manager = libnicocache.VideoCacheManager(
-        libnicocache.pathutil.FileSystemWrapper)
-    video_cache_operator = VideoCacheOperator(
-        video_cache_manager, rootdir=cache_dir_path)
+        video_cache_file_manager, filesystem_wrapper,
+        cache_dir_path, VideoCache)
 
-    logger.info("finish making video cache file path table")
+    logger.info("finish initializing")
 
-    nicocache.video_cache_operator = video_cache_operator
+    nicocache.video_cache_manager = video_cache_manager
     nicocache.secondary_proxy_addr = secondary_proxy_addr
     nicocache.nonproxy_camouflage = nonproxy_camouflage
     nicocache.complete_cache = complete_cache
@@ -323,7 +355,7 @@ def main():
     default_request_filters = []
     default_response_servers = [CONNECT_Handler(),
                                 ReqForThisServerHandler(),
-                                NicoCacheAPIHandler(video_cache_operator),
+                                NicoCacheAPIHandler(video_cache_manager),
                                 nicocache.handle_video_request,
                                 nicocache.simple_proxy_response_server]
     default_response_filters = []
@@ -340,17 +372,16 @@ def main():
     response_filters = []
 
     for extension in extensions:
-        request_filters.extend(extension.request_filters)
-        response_servers.extend(extension.response_servers)
-        response_filters.extend(extension.response_filters)
+        if extension.request_filter:
+            request_filters.append(extension.request_filter)
+        if extension.response_filter:
+            response_filters.append(extension.response_filter)
+        if extension.response_server:
+            response_servers.append(extension.response_server)
 
     request_filters.extend(default_request_filters)
-    response_servers.extend(default_response_servers)
     response_filters.extend(default_response_filters)
-
-    for extension in extensions:
-        request_filters.extend(extension.request_filters_extend)
-        response_filters.extend(extension.response_filters_extend)
+    response_servers.extend(default_response_servers)
 
     handler = proxtheta.utility.proxy.FilteringResponseServers(
         request_filters=request_filters,

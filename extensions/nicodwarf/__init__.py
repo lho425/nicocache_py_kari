@@ -22,4 +22,4 @@ class VideoRequestSaver(proxy.RequestFilter):
 
 extension = Extension()
 
-extension.request_filters = [VideoRequestSaver()]
+extension.request_filter = VideoRequestSaver()
