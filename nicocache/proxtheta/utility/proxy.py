@@ -111,6 +111,7 @@ class ResponseFilter(object):
             self.filtering = filtering
 
     def __call__(self, res, body_file, req, info):
+        # ja!!!
         # めずらしく我ながら汚いコードに
         # やりたいこと
 
@@ -129,44 +130,35 @@ class ResponseFilter(object):
             if not self.accept(res, req, info):
                 return res, body_file_hldr.release()
 
+            # not have to load body
+            # or
+            # response body already loaded as plain text
             if ((not self.load_body(res, req, info)) or
                     not (res.is_chunked() and
                          res.headers.get("Content-Encoding", "") != "") and
                     res.body is not None):
-                # not have to load body
-                # or
-                # response body already loaded as plain text
+
                 res = self.filtering(res, req, info)
                 return res, body_file_hldr.release()
 
-            if body_file_hldr.obj is None:
-                # response body already loaded
-                # but i want to use only body_file_hldr...
-                body_file_hldr.obj = StringIO.StringIO(res.body)
-                res.body = None
+            if body_file_hldr.obj is not None:
+                res = common.load_boody(res, body_file_hldr.obj, req)
+                if res.body is None:
+                    return res, body_file_hldr.release()
 
-            assert body_file_hldr.obj is not None
+                body_file_hldr.release().close()
 
-            if res.is_chunked():
-                res = common.load_chunked_body(
-                    res, body_file_hldr.release())
-                body_file_hldr.obj = StringIO.StringIO(res.body)
-                res.body = None
+            assert body_file_hldr.obj is None
 
-            assert body_file_hldr.obj is not None
-
-            res = common.unzip_http_body(
-                res, body_file_hldr.release(), req)
+            res = common.unzip_http_body(res)
 
             if "Content-Encoding" in res.headers:
                 # body is unknown encoding. not unziped
-                assert body_file_hldr.obj is None
                 logger.warning("unkkown Content-Encoding: %s."
                                "response filtering skipped.", res.headers["Content-Encoding"])
                 return res, None
 
             res = self.filtering(res, req, info)
-            assert body_file_hldr.obj is None
             return res, None
 
 

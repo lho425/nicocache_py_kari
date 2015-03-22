@@ -34,6 +34,13 @@ def copy_file(srcf, distf, size=-1, bufsize=8192):
         return
 
 
+def read_file(fileobj, size=-1, bufsize=8192):
+    distf = StringIO.StringIO()
+    copy_file(fileobj, distf, size, bufsize)
+    distf.seek(0, 0)
+    return distf.read()
+
+
 def copy_chunked_body_file(srcf):
     """extract chunked data from srcf and copy to distf"""
     distf = StringIO.StringIO()
@@ -66,37 +73,42 @@ def load_chunked_body(res, body_resource):
     return res
 
 
-def unzip_http_body(res, body_file, hint_req=None):
-    """unzip and load body to res.body.if not zipped, only loading body."""
+def load_boody(res, body_file, hint_req=None):
+    if res.is_chunked():
+        return load_chunked_body(res, body_file)
+
+    length = httpmes.get_transfer_length(res, hint_req)
+    if length == httpmes.UNKNOWN:
+        return res
+
+    assert length != httpmes.CHUNKED
+    res.body = read_file(body_file, length)
+    return res
+
+
+def unzip_http_body(res):
+    """unzip and load body to res.body.
+    arg: res.body must not be None"""
 
     content = None
     # see rfc2616 3.5, 14.11
     content_encoding = res.headers.get("Content-Encoding", "")
-    try:
-        if content_encoding == "gzip" or content_encoding == "x-gzip":
-            with gzip.GzipFile(fileobj=body_file) as f:
-                content = f.read()
-            del res.headers["Content-Encoding"]
 
-        elif content_encoding == "deflate":
-            ziped_content = body_file.read(res.get_content_length())
-            content = zlib.decompress(ziped_content)
-            del res.headers["Content-Encoding"]
-
-        elif content_encoding == "" or content_encoding == "identity":
-            content = body_file.read(res.get_content_length())
-            del res.headers["Content-Encoding"]
-
-        else:
-            content = body_file.read(
-                int(httpmes.get_transfer_length(res, hint_req)))
-
-    except:
+    if content_encoding == "gzip" or content_encoding == "x-gzip":
+        body_file = StringIO.StringIO(res.body)
+        with gzip.GzipFile(fileobj=body_file) as f:
+            content = f.read()
         body_file.close()
-        raise
+        del res.headers["Content-Encoding"]
 
-    body_file.close()
-    body_file = None
+    elif content_encoding == "deflate":
+        content = zlib.decompress(res.body)
+        del res.headers["Content-Encoding"]
+
+    elif content_encoding == "" or content_encoding == "identity":
+
+        del res.headers["Content-Encoding"]
+        return res
 
     res.body = content
     res.set_content_length()

@@ -35,7 +35,8 @@ from proxtheta.utility.proxy import convert_upstream_error
 from proxtheta.utility.server import is_request_to_this_server
 
 import libnicovideo
-
+import libnicovideo.videoinforewriter
+import libnicovideo.thumbinfo
 import libnicocache.pathutil
 
 logger = _logging.getLogger("nicocache.py")
@@ -265,9 +266,10 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
     """とりあえず saveだけ"""
     macher = re.compile("/watch/([^/]+)/(.+)")
 
-    def __init__(self, video_cache_manager):
+    def __init__(self, video_cache_manager, thimbinfo_server):
 
         self.video_cache_manager = video_cache_manager
+        self._thimbinfo_server = thimbinfo_server
         proxtheta.utility.server.ResponseServer.__init__(self)
 
     def accept(self, req, info):
@@ -287,7 +289,7 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
             ("HTTP/1.1", 200, "OK"))
         res.headers["Content-type"] = "text/plain ;charset=utf-8"
 
-        thumbinfo = libnicovideo.ThumbInfo(watch_id)
+        thumbinfo = self._thimbinfo_server.get(watch_id)
 
         video_cache_pair = self.video_cache_manager.get_video_cache_pair(
             thumbinfo.video_id[2:])
@@ -307,8 +309,7 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
         res_body = "NicoCacheAPI command results: \n" + ''.join(logs)
 
         logger.info(res_body)
-        res.body = res_body.decode(
-            locale.getpreferredencoding()).encode("utf-8")
+        res.body = res_body.encode("utf-8")
         res.set_content_length()
 
         return ResponsePack(res, server_sockfile=server_sockfile)
