@@ -43,37 +43,33 @@ logger = _logging.getLogger("nicocache.py")
 # logger.setLevel(_logging.DEBUG)
 
 
-class VideoCacheGuessVideoTypeMixin():
-    MixedClass = None
-
-    def make_http_video_resource(
-            self, req, http_resource_getter_func, server_sockfile):
-        video_type, _, _ = libnicocache.get_videotype_videonum_islow__with_req(
-            req, None)
-
-        self.update_info(video_type=video_type)
-
-        return self.MixedClass.make_http_video_resource(
-            self, req, http_resource_getter_func, server_sockfile)
-
-
 def makeVideoCacheGuessVideoTypeMixin(VideoCacheClass):
-    class VideoCache(
-            VideoCacheGuessVideoTypeMixin, VideoCacheClass):
+    class VideoCacheGuessVideoType(VideoCacheClass):
 
-        MixedClass = VideoCacheClass
+        def make_http_video_resource(
+                self, req, http_resource_getter_func, server_sockfile):
+            video_type, _, _ = libnicocache.\
+                get_videotype_videonum_islow__with_req(
+                    req, None)
 
-    return VideoCache
+            self.update_info(video_type=video_type)
+
+            return VideoCacheClass.make_http_video_resource(
+                self, req, http_resource_getter_func, server_sockfile)
+
+    return VideoCacheGuessVideoType
 
 VideoCache = makeVideoCacheGuessVideoTypeMixin(libnicocache.VideoCache)
 
 
-class VideoCacheTitleMixin():
-    MixedClass = None
+def makeVideoCacheTitleMixin(VideoCacheClass):
+    class VideoCacheWithTitle(VideoCacheClass):
 
-    def make_http_video_resource(
-            self, req, http_resource_getter_func, server_sockfile):
-        raise NotImplementedError
+        def make_http_video_resource(
+                self, req, http_resource_getter_func, server_sockfile):
+            raise NotImplementedError
+
+    return VideoCacheTitle
 
 
 class NicoCacheConfig(object):
@@ -91,19 +87,23 @@ def load_config():
     return NicoCacheConfig(config)
 
 
-class VideoCacheAutoRemoveMixin():
+def makeVideoCacheAutoRemoveMixin(VideoCacheClass):
 
-    """キャッシュ時に、動画ファイル数が上限を超えていたり、動画の合計サイズが上限を超えていたりしたときに、
-    自動的に古いキャッシュを消す機能を加えるMixin
-    現状では大量のキャッシュに対して、動画ファイル数や動画の合計サイズを高速で取得する方法と、
-    古い動画ファイルを高速で見つける方法が思いつかないので、保留"""
+    class VideoCacheWithAutoRemoving(VideoCacheClass):
 
-    MixedClass = None
+        """キャッシュ時に、動画ファイル数が上限を超えていたり、動画の合計サイズが上限を超えていたりしたときに、
+        自動的に古いキャッシュを消す機能を加えるMixin
+        現状では大量のキャッシュに対して、動画ファイル数や動画の合計サイズを高速で取得する方法と、
+        古い動画ファイルを高速で見つける方法が思いつかないので、保留"""
 
-    def make_http_video_resource(
-            self, req, http_resource_getter_func, server_sockfile):
-        config = load_config()  # 直にグローバル関数を呼んでいるので注意
-        raise NotImplementedError
+        MixedClass = None
+
+        def make_http_video_resource(
+                self, req, http_resource_getter_func, server_sockfile):
+            config = load_config()  # 直にグローバル関数を呼んでいるので注意
+            raise NotImplementedError
+
+    return VideoCacheWithAutoRemoving
 
 
 class Extension(object):
