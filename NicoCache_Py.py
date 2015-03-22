@@ -1,0 +1,3 @@
+import nicocache
+
+nicocache.main()

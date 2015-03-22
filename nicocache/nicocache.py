@@ -75,6 +75,36 @@ class VideoCacheTitleMixin():
         raise NotImplementedError
 
 
+class NicoCacheConfig(object):
+
+    def __init__(self, config):
+        self.listen_port = getattr(config, "listen_port", 8080)
+        # セカンダリプロクシ
+        self.proxy_host = getattr(config, "proxy_host", "")
+        self.proxy_port = getattr(config, "proxy_host", 8080)
+
+
+def load_config():
+    import config
+    reload(config)
+    return NicoCacheConfig(config)
+
+
+class VideoCacheAutoRemoveMixin():
+
+    """キャッシュ時に、動画ファイル数が上限を超えていたり、動画の合計サイズが上限を超えていたりしたときに、
+    自動的に古いキャッシュを消す機能を加えるMixin
+    現状では大量のキャッシュに対して、動画ファイル数や動画の合計サイズを高速で取得する方法と、
+    古い動画ファイルを高速で見つける方法が思いつかないので、保留"""
+
+    MixedClass = None
+
+    def make_http_video_resource(
+            self, req, http_resource_getter_func, server_sockfile):
+        config = load_config()  # 直にグローバル関数を呼んでいるので注意
+        raise NotImplementedError
+
+
 class Extension(object):
     __slots__ = ("name",
                  "request_filter",
@@ -312,12 +342,11 @@ def main():
     logger.info(u"ニコキャッシュ.py(仮)")
 
     if not os.path.exists("./config.py"):
-        shutil.copyfile("./config.py.template", "./config.py")
+        shutil.copyfile(os.path.join(
+            os.path.dirname(__file__), "config.py.template"), "./config.py")
 
-    # todo!!!設定ファイルから読み込む
-    import config
+    config = load_config()
     port = config.listen_port
-    recursive = True
     complete_cache = False
     if config.proxy_host:
         secondary_proxy_addr = core.common.Address(
@@ -345,20 +374,25 @@ def main():
         video_cache_file_manager, filesystem_wrapper,
         cache_dir_path, VideoCache)
 
-    logger.info("finish initializing")
+    video_info_rewriter = libnicovideo.videoinforewriter.Rewriter()
 
     nicocache.video_cache_manager = video_cache_manager
     nicocache.secondary_proxy_addr = secondary_proxy_addr
     nicocache.nonproxy_camouflage = nonproxy_camouflage
     nicocache.complete_cache = complete_cache
 
+    thumbinfo_server = libnicovideo.thumbinfo.CashngThumbInfoServer()
+
     default_request_filters = []
     default_response_servers = [CONNECT_Handler(),
                                 ReqForThisServerHandler(),
-                                NicoCacheAPIHandler(video_cache_manager),
+                                NicoCacheAPIHandler(
+                                    video_cache_manager, thumbinfo_server),
                                 nicocache.handle_video_request,
                                 nicocache.simple_proxy_response_server]
-    default_response_filters = []
+    default_response_filters = [video_info_rewriter]
+
+    logger.info("finish initializing")
 
     # エクステンションの取り込み
     logger.info("load extensions")
