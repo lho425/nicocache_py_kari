@@ -2,4 +2,4 @@
 
 cd $(dirname $0)
 
-python nicocache.py "$@"
+python NicoCache_py.py "$@"
