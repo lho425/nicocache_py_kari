@@ -70,12 +70,13 @@ def print_dict(dct, logger):
 
 
 class GinzaRewriter(RewriterAbstructBase):
-    req_path_macher = re.compile("/+watch/+[^/]+/*$")
     # 頑張ってニコキャッシュPyのAPIが引っかからないようにする
+    req_path_macher = re.compile("/+watch/+[^/]+/*$")
+
+    # re.DOTALLがないと'.'が改行にマッチしない
     macher = re.compile(
         """(.*<div id="watchAPIDataContainer" style="display:none">)"""
         """(.*?)(</div>.*)""", re.DOTALL)
-    # re.DOTALLがないと'.'が改行にマッチしない
 
     def _is_videoinfo_request(self, req):
         return (req.host.startswith("www.nicovideo.jp") and
@@ -113,8 +114,16 @@ class GinzaRewriter(RewriterAbstructBase):
             watch_api_data_dict, flvinfo_dict = self._rewrite_main(
                 watch_api_data_dict, flvinfo_dict)
 
-            logger.info("unquote 1 + urlparse.parse_qs")
-            print_dict(flvinfo_dict, logger)
+            # 注釈
+            # python2のurlparse.parse_qs(s)は内部的にurlparse.unquoteを呼んでいる
+            # urlparse.unquote(s)はunicode文字を渡すと
+            # sをbytesに変換 => unquote => unicodeに戻してreturn
+            # という働きをする。このとき最後のunicode変換にはlatin1文字コードが採用される
+            # asciiがunicodeの128までのコードポイントと互換性があるように、
+            # latin1もunicodeの255までのコードポイントと互換性がある
+            # また、pythonはu'\xij'をu'\u00ij'と同等に解釈する
+            # https://www.python.org/dev/peps/pep-0223/
+            # http://docs.python.jp/2/howto/unicode.html#python-unicode
 
             watch_api_data_container = json.dumps(watch_api_data_dict)
 
@@ -131,5 +140,10 @@ class GinzaRewriter(RewriterAbstructBase):
             logger.exception("error occurred, fallback.\n%s", e)
             return content
 
+    def _rewrite_main(self, watch_api_data_dict, flvinfo_dict):
+        logger.info("unquote 1 + urlparse.parse_qs")
+        print_dict(flvinfo_dict, logger)
+
+        return watch_api_data_dict, flvinfo_dict
 
 Rewriter = GinzaRewriter
