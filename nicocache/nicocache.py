@@ -34,10 +34,10 @@ from proxtheta.core.common import ResponsePack
 from proxtheta.utility.proxy import convert_upstream_error
 from proxtheta.utility.server import is_request_to_this_server
 
-import libnicovideo
-import libnicovideo.videoinforewriter
+
 import libnicovideo.thumbinfo
 import libnicocache.pathutil
+from nicocache import rewriter
 
 logger = _logging.getLogger("nicocache.py")
 # logger.setLevel(_logging.DEBUG)
@@ -69,7 +69,7 @@ def makeVideoCacheTitleMixin(VideoCacheClass):
                 self, req, http_resource_getter_func, server_sockfile):
             raise NotImplementedError
 
-    return VideoCacheTitle
+    return VideoCacheWithTitle
 
 
 class NicoCacheConfig(object):
@@ -375,7 +375,7 @@ def main():
         video_cache_file_manager, filesystem_wrapper,
         cache_dir_path, VideoCache)
 
-    video_info_rewriter = libnicovideo.videoinforewriter.Rewriter()
+    video_info_rewriter = rewriter.Rewriter()
 
     nicocache.video_cache_manager = video_cache_manager
     nicocache.secondary_proxy_addr = secondary_proxy_addr

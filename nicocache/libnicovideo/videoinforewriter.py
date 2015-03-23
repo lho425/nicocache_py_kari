@@ -141,9 +141,5 @@ class GinzaRewriter(RewriterAbstructBase):
             return content
 
     def _rewrite_main(self, watch_api_data_dict, flvinfo_dict):
-        logger.info("unquote 1 + urlparse.parse_qs")
-        print_dict(flvinfo_dict, logger)
 
         return watch_api_data_dict, flvinfo_dict
-
-Rewriter = GinzaRewriter

@@ -16,6 +16,7 @@
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
+"""ニコ動の動画キャッシュプロクシサーバを実装する上で、ファイルシステム上のキャッシュを管理するため道具をまとめたライブラリ"""
 
 import os
 import logging as _logging
