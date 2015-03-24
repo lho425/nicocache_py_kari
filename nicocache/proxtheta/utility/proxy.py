@@ -98,7 +98,8 @@ class ResponseFilter(object):
 
     @staticmethod
     def load_body(res, req, info):
-        return res.headers.get("Content-Type", "text").startswith("text")
+        # return res.headers.get("Content-Type", "text").startswith("text")
+        return True
 
     @staticmethod
     def filtering(res, req, info):
@@ -130,15 +131,21 @@ class ResponseFilter(object):
             if not self.accept(res, req, info):
                 return res, body_file_hldr.release()
 
-            # not have to load body
-            # or
-            # response body already loaded as plain text
-            if ((not self.load_body(res, req, info)) or
-                    not (res.is_chunked() and
-                         res.headers.get("Content-Encoding", "") != "") and
-                    res.body is not None):
+            # dirty!!! 分岐が複雑なので、ガード節以外のリターンを一ヶ所にまとめる
 
+            # not have to load body
+            if (not self.load_body(res, req, info)):
                 res = self.filtering(res, req, info)
+                return res
+
+            # response body already loaded as plain text
+            if ((res.body is not None and
+                 not (res.is_chunked() and
+                      res.headers.get("Content-Encoding", "") != ""))):
+
+                assert res.body is not None
+                res = self.filtering(res, req, info)
+                res.set_content_length()
                 return res, body_file_hldr.release()
 
             if body_file_hldr.obj is not None:
@@ -158,7 +165,9 @@ class ResponseFilter(object):
                                "response filtering skipped.", res.headers["Content-Encoding"])
                 return res, None
 
+            assert res.body is not None
             res = self.filtering(res, req, info)
+            res.set_content_length()
             return res, None
 
 
