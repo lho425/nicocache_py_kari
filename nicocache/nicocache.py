@@ -31,6 +31,7 @@ import proxtheta.utility.server
 from proxtheta import core
 from proxtheta.core import httpmes
 from proxtheta.core.common import ResponsePack
+from proxtheta.utility import proxy
 from proxtheta.utility.proxy import convert_upstream_error
 from proxtheta.utility.server import is_request_to_this_server
 
@@ -315,6 +316,34 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
         return ResponsePack(res, server_sockfile=server_sockfile)
 
 
+class LocalURIHandler(proxy.ResponseServer):
+
+    """http://www.nicovideo.jp/local/*
+    を取り扱う.
+    (NicoCache_Py.pyがあるディレクトリ)/local/にあるファイルを転送する"""
+
+    @staticmethod
+    def accept(req, info):
+        return (req.host == "www.nicovideo.jp" and
+                req.path.startswith("/local"))
+
+    @staticmethod
+    def serve(req, server_sockfile, info):
+        path = "." + req.path
+        logger.debug("local file request: %s", path)
+        if not os.path.isfile(path):
+            res = httpmes.HTTP11Error((404, "Not Found"))
+            return ResponsePack(res, server_sockfile=server_sockfile)
+
+        size = os.path.getsize(path)
+
+        res = httpmes.HTTPResponse(("HTTP/1.1", 200, "OK"))
+        res.set_content_length(size)
+
+        return ResponsePack(res, body_file=open(path),
+                            server_sockfile=server_sockfile)
+
+
 def load_extensions():
     extensions = []
     importer = pkgutil.get_importer("extensions")
@@ -389,6 +418,7 @@ def main():
                                 ReqForThisServerHandler(),
                                 NicoCacheAPIHandler(
                                     video_cache_manager, thumbinfo_server),
+                                LocalURIHandler(),
                                 nicocache.handle_video_request,
                                 nicocache.simple_proxy_response_server]
     default_response_filters = [video_info_rewriter]
