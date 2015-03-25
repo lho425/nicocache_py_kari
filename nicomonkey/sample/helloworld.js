@@ -1,6 +1,7 @@
 // ==UserScript==
 // @name helloworld
 // @description sample
+// @include http://www.nicovideo.jp/watch/*
 // ==/UserScript==
 
-console.log("helloworld");
+console.log("hello nicomonkey!");
