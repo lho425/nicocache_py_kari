@@ -404,7 +404,7 @@ def main():
         video_cache_file_manager, filesystem_wrapper,
         cache_dir_path, VideoCache)
 
-    video_info_rewriter = rewriter.Rewriter()
+    video_info_rewriter = rewriter.Rewriter(video_cache_manager)
 
     nicocache.video_cache_manager = video_cache_manager
     nicocache.secondary_proxy_addr = secondary_proxy_addr

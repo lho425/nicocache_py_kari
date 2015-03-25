@@ -62,24 +62,40 @@ logger = _logging.getLogger(__name__)
 
 def parse_nicovideo_request_query(query):
     """ニコニコ動画の動画サーバへのリクエストのクエリから、
-    (query_name, video_num)を抽出して返す
+    (query_name, video_num, hash_num, is_low)を抽出して返す
+    hash_numはvideo_num.とlowの間にの後ろについてるよくわかんない数字
     例)
     url: http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688low
     query: m=24992647.47688low
-    (query_name, video_num, is_low) = ("m", "24992647", True)"""
+    (query_name, video_num, hash_num, is_low) =
+    ("m", "24992647", "47688", True)"""
+    is_low = query.endswith("low")
 
     try:
         query_name, query_value = query.split('=')
-        video_num = query_value.split('.')[0]
-    except ValueError:
+        video_num, tail = query_value.split('.')
+        # (例) tail = 47688low
+        if is_low:
+            hash_num = tail[:-3]
+        else:
+            hash_num = tail
+    except (ValueError, IndexError):
         raise RuntimeError(
             "get_videoid_with_httpreq(): error. query: " + query)
 
-    return (query_name, video_num, query.endswith("low"))
+    return (query_name, video_num, hash_num, is_low)
+
+
+def unparse_nicovideo_request_query(query_name, video_num, hash_num, is_low):
+    """parse_nicovideo_request_queryの逆"""
+    is_low_str = "low" if is_low else ""
+
+    query = ''.join((query_name, "=", video_num, ".", hash_num, is_low_str))
+    return query
 
 
 def get_videotype_videonum_islow__with_req(req, video_type_cacher):
-    query_name, video_num, is_low = parse_nicovideo_request_query(req.query)
+    query_name, video_num, _, is_low = parse_nicovideo_request_query(req.query)
 
     video_type = None
     if video_type_cacher is not None:
@@ -306,6 +322,9 @@ class VideoCache(object):
 
     def exists(self):
         return self._video_cache_file.exists()
+
+    def is_complete(self):
+        return not self.info.tmp
 
 
 #     !!! あとでVideoCacheManagerに移るべき部分
