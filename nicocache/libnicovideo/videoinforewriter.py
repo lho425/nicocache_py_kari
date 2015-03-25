@@ -58,16 +58,25 @@ class RewriterAbstructBase(ResponseFilter):
         return args
 
 
-def print_dict(a_dict, logger_func):
-    """logger_funcにはlogger.info等を渡してください"""
-    logger_func("{")
+def dict_to_str_list(a_dict, a_list=None, indent_level=0):
+    a_list = a_list or []
+    #a_list.append("    " * indent_level)
+    a_list.append("{\n")
     for k, v in a_dict.iteritems():
+        a_list.append("    " * (indent_level + 1))
         if isinstance(v, dict):
-            logger_func("%s:", k)
-            print_dict(v, logger_func)
+            a_list.append("%s: " % k)
+            dict_to_str_list(v, a_list, indent_level + 1)
         else:
-            logger_func("%s: %s", k, v)
-    logger_func("}")
+            a_list.append("%s: %s\n" % (k, v))
+    a_list.append("    " * indent_level)
+    a_list.append("}\n")
+    return a_list
+
+
+def print_dict(a_dict, print_func):
+    """logger_funcにはlogger.info等を渡してください"""
+    print_func(''.join(dict_to_str_list(a_dict)))
 
 
 class GinzaRewriter(RewriterAbstructBase):
