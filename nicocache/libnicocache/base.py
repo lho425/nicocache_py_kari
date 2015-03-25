@@ -205,7 +205,7 @@ class VideoCacheInfo(_VideoCacheInfo):
         filename = ''.join(
             (tmpstr, self.video_id, lowstr, title_str, filename_extension_str))
 
-        return os.path.join(dirpath, filename)
+        return os.path.normpath(os.path.join(dirpath, filename))
 
     def match(self, video_cache_info):
         """selfとvideo_cache_infoの持つパラメタを比較し、すべて一致していたらTureを返す.
