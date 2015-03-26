@@ -99,17 +99,17 @@ class GinzaRewriter(RewriterAbstructBase):
             if res.headers.get("Content-Type").\
                     startswith("application/json"):
                 escaped_json = False
-                watch_api_data_container = content
+                watch_api_data = content
 
             else:
                 escaped_json = True
                 match = self.watchAPIDataContainer_pattern.match(content)
-                watch_api_data_container = match.group("watch_api_data")
+                watch_api_data = match.group("watch_api_data")
                 # エスケープされたjson文字列のエスケープを解く
-                watch_api_data_container = unescape(
-                    watch_api_data_container, {"&quot;": '"'})
+                watch_api_data = unescape(
+                    watch_api_data, {"&quot;": '"'})
             # json文字列をdictにする
-            watch_api_data_dict = json.loads(watch_api_data_container)
+            watch_api_data_dict = json.loads(watch_api_data)
 
             # 動画(mp4等)のURLを得るにはさらにURLエンコードを解く必要がある(=とか%がエンコードされている)
             flvinfo = watch_api_data_dict["flashvars"]["flvInfo"]
@@ -140,16 +140,16 @@ class GinzaRewriter(RewriterAbstructBase):
 
             # json dictに入れるときはunicode型にする必要はない
             watch_api_data_dict["flashvars"]["flvInfo"] = flvinfo
-            watch_api_data_container = json.dumps(watch_api_data_dict)
+            watch_api_data = json.dumps(watch_api_data_dict)
 
             if not escaped_json:
-                return watch_api_data_container
+                return watch_api_data
             else:
-                # htmlにjsonが埋め込まれていたので、ちゃんと戻してあげる
-                watch_api_data_container = escape(
-                    watch_api_data_container, {'"': "&quot;"})
+                # htmlにjsonが埋め込まれていたので、エスケープした上で、ちゃんと戻してあげる
+                watch_api_data = escape(
+                    watch_api_data, {'"': "&quot;"})
                 return ''.join(
-                    (match.group("head"), watch_api_data_container, match.group("tail")))
+                    (match.group("head"), watch_api_data, match.group("tail")))
 
         except Exception as e:
             logger.exception("error occurred, fallback.\n%s", e)
