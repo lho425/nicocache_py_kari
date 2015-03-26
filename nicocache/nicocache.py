@@ -340,7 +340,7 @@ class LocalURIHandler(proxy.ResponseServer):
         res = httpmes.HTTPResponse(("HTTP/1.1", 200, "OK"))
         res.set_content_length(size)
 
-        return ResponsePack(res, body_file=open(path),
+        return ResponsePack(res, body_file=open(path, "rb"),
                             server_sockfile=server_sockfile)
 
 

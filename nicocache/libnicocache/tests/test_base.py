@@ -302,7 +302,7 @@ class TestCachingReader(NicoCacheTestCase):
 
         caching_reader.close()
 
-        with open(self.get_real_path("cachefile.txt")) as cachefile:
+        with open(self.get_real_path("cachefile.txt"), "rb") as cachefile:
             self.assertEqual(cachefile.read(), "a" * 100 + "b" * 10)
 
     def test_complete_cache_true(self):
@@ -314,7 +314,7 @@ class TestCachingReader(NicoCacheTestCase):
                                        complete_cache=True,  # <=ここをテストしたい
                                        logger=logger_for_test)
         caching_reader.close()
-        with open(self.get_real_path("cachefile.txt")) as cachefile:
+        with open(self.get_real_path("cachefile.txt"), "rb") as cachefile:
             self.assertEqual(self.complete_data, cachefile.read())
 
 # def test():
