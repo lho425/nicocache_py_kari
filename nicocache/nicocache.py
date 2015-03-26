@@ -265,7 +265,7 @@ class ReqForThisServerHandler(proxtheta.utility.server.ResponseServer):
 class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
 
     """とりあえず saveだけ"""
-    macher = re.compile("/watch/([^/]+)/(.+)")
+    pattern = re.compile("/watch/([^/]+)/(.+)")
 
     def __init__(self, video_cache_manager, thimbinfo_server):
 
@@ -275,13 +275,13 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
 
     def accept(self, req, info):
         return (req.host == "www.nicovideo.jp" and
-                bool(self.macher.match(req.path)))
+                bool(self.pattern.match(req.path)))
 
     def serve(self, req, server_sockfile, info):
         """とりあえずsaveだけ"""
-        m = self.macher.match(req.path)
-        watch_id = m.group(1)
-        command = m.group(2)
+        match = self.pattern.match(req.path)
+        watch_id = match.group(1)
+        command = match.group(2)
 
         if command != "save":
             return None

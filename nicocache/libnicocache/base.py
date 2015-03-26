@@ -146,22 +146,22 @@ class VideoCacheInfo(_VideoCacheInfo):
         # 拡張子を分離
         filename, filename_extension = os.path.splitext(filename)
         filename_extension = filename_extension[1:]  # 拡張子に.が含まれてしまうため
-        m = cls.pattern.match(filename)
-        if not m:
+        match = cls.pattern.match(filename)
+        if not match:
             raise VideoCacheInfoParameterError(
                 "cannot parse filename: %s" % filename)
 
-        if m.group("tmp"):
+        if match.group("tmp"):
             tmp = True
 
-        video_type = m.group("video_type")
-        video_num = m.group("video_num")
+        video_type = match.group("video_type")
+        video_num = match.group("video_num")
 
-        if m.group("low"):
+        if match.group("low"):
             low = True
 
-        if m.group("_title"):
-            title = m.group("_title")[1:]  # _(アンダーバー)もタイトルにマッチしてしまうので[1:]とする
+        if match.group("_title"):
+            title = match.group("_title")[1:]  # _(アンダーバー)もタイトルにマッチしてしまうので[1:]とする
 
         return cls(
             video_type, video_num,

@@ -81,16 +81,16 @@ def print_dict(a_dict, print_func):
 
 class GinzaRewriter(RewriterAbstructBase):
     # 頑張ってニコキャッシュPyのAPIが引っかからないようにする
-    req_path_macher = re.compile("/+watch/+[^/]+/*$")
+    req_path_pattern = re.compile("/+watch/+[^/]+/*$")
 
     # re.DOTALLがないと'.'が改行にマッチしない
-    macher = re.compile(
+    watchAPIDataContainer_pattern = re.compile(
         """(.*<div id="watchAPIDataContainer" style="display:none">)"""
         """(.*?)(</div>.*)""", re.DOTALL)
 
     def _is_videoinfo_request(self, req):
         return (req.host.startswith("www.nicovideo.jp") and
-                self.req_path_macher.match(req.path))
+                self.req_path_pattern.match(req.path))
 
     def _rewrite(self, content, req, res):
         escaped_json = bool()
@@ -103,8 +103,8 @@ class GinzaRewriter(RewriterAbstructBase):
 
             else:
                 escaped_json = True
-                m = self.macher.match(content)
-                watch_api_data_container = m.group(2)
+                match = self.watchAPIDataContainer_pattern.match(content)
+                watch_api_data_container = match.group(2)
                 # エスケープされたjson文字列のエスケープを解く
                 watch_api_data_container = unescape(
                     watch_api_data_container, {"&quot;": '"'})
@@ -149,7 +149,7 @@ class GinzaRewriter(RewriterAbstructBase):
                 watch_api_data_container = escape(
                     watch_api_data_container, {'"': "&quot;"})
                 return ''.join(
-                    (m.group(1), watch_api_data_container, m.group(3)))
+                    (match.group(1), watch_api_data_container, match.group(3)))
 
         except Exception as e:
             logger.exception("error occurred, fallback.\n%s", e)
