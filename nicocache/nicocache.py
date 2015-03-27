@@ -337,7 +337,7 @@ class LocalURIHandler(proxy.ResponseServer):
 
         size = os.path.getsize(path)
 
-        res = httpmes.HTTPResponse(("HTTP/1.1", 200, "OK"))
+        res = httpmes.HTTPResponse(("HTTP/1.1", 200, "OK"), body=None)
         res.set_content_length(size)
 
         return ResponsePack(res, body_file=open(path, "rb"),
