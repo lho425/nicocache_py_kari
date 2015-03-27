@@ -115,7 +115,7 @@ function rewriteVideoLinkTagToPopup(getVideoLinkTags, getWatchIdFromVideoLinkTag
 	    
 	}
     });
-    mo.observe(videoExplorerContent, {childList:true, subtree :true, attribute_: true});
+    mo.observe(videoExplorerContent, {childList:true, subtree :true});
 })();
 
 /************* videoExplorer以外の通常のリンクの書き換え ******************/
