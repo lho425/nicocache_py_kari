@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -
 import logging as _logging
 # todo!!!py2かpy3でimportを分岐
-from urlparse import urlparse, urlunparse, parse_qs
+from urlparse import parse_qs
 
 from .libnicovideo import videoinforewriter
-from .libnicocache import (parse_nicovideo_request_query,
-                           unparse_nicovideo_request_query)
+
 
 logger = _logging.getLogger(__name__)
 
@@ -22,11 +21,50 @@ class NicoCacheRewriterMixin(object):
         video_cache_pair = self._video_cache_manager.get_video_cache_pair(
             video_num)
 
-        return (video_cache_pair[0].is_complete(), video_cache_pair[1].is_complete())
+        return (video_cache_pair[0].is_complete(),
+                video_cache_pair[1].is_complete())
 
 
 class NicoCacheGinzaRewriter(NicoCacheRewriterMixin,
                              videoinforewriter.GinzaRewriter):
+
+    def _rewrite_for_use_local_cache(
+            self, watch_api_data_dict, flvinfo_dict, video_num, is_low):
+
+        # ここでlogを残すのはよろしくないかもしれない
+        # レビュアーさんに知恵をかしてもらう
+        is_need_payment = (
+            watch_api_data_dict["flashvars"].get("isNeedPayment", 0) > 0)
+
+        deleted = ("deleted" in flvinfo_dict)
+
+        if is_need_payment or deleted:
+            if is_need_payment:
+                logger.info(
+                    "Video number %s requires payment to watch.", video_num)
+            else:
+                assert deleted
+                logger.info(
+                    "Video number %s was deleted.", video_num)
+
+            logger.info(
+                "But local%s cache found."
+                " Rewrite video information to use that.",
+                "" if not is_low else " low")
+
+        flvinfo_dict["url"] = [
+            'http://smile-nicocache00.nicovideo.jp/smile?m=' +
+            video_num + ".00000"]
+
+        if is_low:
+
+            flvinfo_dict["url"][0] += "low"
+
+        # 有料動画フラグを消す
+        watch_api_data_dict["flashvars"]["isNeedPayment"] = 0
+        # 削除済フラグを消す
+        if "deleted" in flvinfo_dict:
+            del flvinfo_dict["deleted"]
 
     def _rewrite_main(self, req, watch_api_data_dict, flvinfo_dict):
         logger.debug("# watchAPIDataContainer #")
@@ -45,32 +83,44 @@ class NicoCacheGinzaRewriter(NicoCacheRewriterMixin,
 
         req_query = parse_qs(req.query, keep_blank_values=True)
 
-        if (("eco" in req_query) and
-                (req_query["eco"][0] != "" or req_query["eco"][0] != "0")):
-            # eco=1等ユーザーによるエコノミー強制がTrueのとき
-            pass
-        else:
-            if has_non_low_cache:  # とりあえず非エコノミーだけ
-                # todo!!! 動画が削除されているときに、ローカルにエコノミーキャッシュがあるのなら、それを使うように書き換える
+        # eco=1等ユーザーによるエコノミー強制がかかっているか
+        is_user_economy_mode = (("eco" in req_query) and
+                                (req_query["eco"][0] != "" or
+                                 req_query["eco"][0] != "0"))
+        is_need_payment = (
+            watch_api_data_dict["flashvars"].get("isNeedPayment", 0) > 0)
 
-                if "url" not in flvinfo_dict:
-                    # ダミーのデータを含む動画URLを入れる
-                    flvinfo_dict["url"] = [
-                        'http://smile-dummy00.nicovideo.jp/smile?m=' +
-                        true_video_num + ".00000"]
+        deleted = ("deleted" in flvinfo_dict)
 
-                url = urlparse(flvinfo_dict["url"][0])
-                (query_name, video_num, hash_num, is_low) = parse_nicovideo_request_query(
-                    url.query)
-                is_low = False
+        # 以下でニコ動のAPIのデータを書き換える
+        # コードが冗長だが、しょうがない
+        if is_user_economy_mode:
+            if has_low_cache:
+                self._rewrite_for_use_local_cache(
+                    watch_api_data_dict, flvinfo_dict,
+                    true_video_num, is_low=True)
 
-                # 有料動画フラグを消す
-                watch_api_data_dict["flashvars"]["isNeedPayment"] = 0
+        elif is_need_payment or deleted:
+            if has_non_low_cache:
+                self._rewrite_for_use_local_cache(
+                    watch_api_data_dict, flvinfo_dict,
+                    true_video_num, is_low=False)
+            elif has_low_cache:
+                self._rewrite_for_use_local_cache(
+                    watch_api_data_dict, flvinfo_dict,
+                    true_video_num, is_low=True)
 
-                query = unparse_nicovideo_request_query(
-                    query_name, video_num, hash_num, is_low)
-                url = url._replace(query=query)
-                flvinfo_dict["url"][0] = urlunparse(url)
+        elif has_non_low_cache or has_low_cache:
+            assert not is_user_economy_mode
+            if has_non_low_cache:
+                self._rewrite_for_use_local_cache(
+                    watch_api_data_dict, flvinfo_dict,
+                    true_video_num, is_low=False)
+            else:
+                if has_low_cache and flvinfo_dict["url"][0].endswith("low"):
+                    self._rewrite_for_use_local_cache(
+                        watch_api_data_dict, flvinfo_dict,
+                        true_video_num, is_low=True)
 
         logger.debug("# rewrited watchAPIDataContainer #")
         videoinforewriter.print_dict(watch_api_data_dict, logger.debug)
