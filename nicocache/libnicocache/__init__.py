@@ -44,7 +44,7 @@ from proxtheta.utility.proxy import convert_upstream_error
 from proxtheta.utility.server import is_request_to_this_server
 
 
-from .base import VideoCacheInfo, VideoCacheFile
+from .base import VideoCacheInfo, VideoCacheFile, VideoCacheInfoParameterError
 from .filecachetool import CachingReader
 from .utility import get_partial_http_resource
 
@@ -636,8 +636,12 @@ class VideoCacheManager:
             subdirpath = dirpath[(len(rootdir) + 1):]  # "rootdir/"の部分だけ取り除く
             for filename in filenames:
 
-                a_video_cache_info = VideoCacheInfo.create_from_filename(
-                    filename, subdir=subdirpath, rootdir=rootdir)
+                try:
+                    a_video_cache_info = VideoCacheInfo.create_from_filename(
+                        filename, subdir=subdirpath, rootdir=rootdir)
+                except VideoCacheInfoParameterError:
+                    # キャッシュ以外のファイルがあると例外を投げられてしまう
+                    continue
 
                 if video_cache_info_query.match(a_video_cache_info):
 
