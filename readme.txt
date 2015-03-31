@@ -21,10 +21,28 @@ NicoCache_Py.batを使うと、nkfを利用して文字コードをsjisに変換
 config.pyを編集すると、設定が変えられます。
 詳しくはconfig.pyの上の方に書いてあることを読んでください。
 
-次のブックマークレットを使うと保存っぽいことができます。
+ライセンスはGPLv3です。
+
+
+#コマンドAPI
+    http://www.nicovideo.jp/watch/smXXXX/save
+にアクセスすると、cache直下にあるsmXXXXのキャッシュ動画ファイルがcache/saveに移動され、ファイル名にタイトルと拡張子がつきます。
+
+    http://www.nicovideo.jp/watch/smXXXX/unsave
+にアクセスすると、cache/saveにあるsmXXXXのキャッシュにsaveコマンドと逆の操作が行われます。
+
+    http://www.nicovideo.jp/watch/smXXXX/rename
+にアクセスすると、cache直下にあるsmXXXXのキャッシュ動画ファイルが削除されます。
+
+
+次のブックマークレットを使うとsaveコマンドを1クリックで実行できます。
+ブラウザでhttp://www.nicovideo.jp/watch/smXXXXを開いている時に仕様してください。
 javascript: $.get(location.href + "/save", function(data){alert(data)})
 
-ライセンスはGPLv3です。
+コマンドAPIは動画をキャッシュしている最中でも使えます。
+windowsは使用中のファイルに対する操作が行えないので、キャッシュsuspend時、もしくはcomplete時に操作が実行されます。
+
+なので、removeコマンドを実行したキャッシュをsaveできてしまったりします(実際はそう見えるだけ)。
 
 #以下開発者向け
 

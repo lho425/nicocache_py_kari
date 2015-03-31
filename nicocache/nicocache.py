@@ -264,7 +264,7 @@ class ReqForThisServerHandler(proxtheta.utility.server.ResponseServer):
 
 class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
 
-    """とりあえず saveだけ"""
+    """とりあえず save unsave removeだけ"""
     pattern = re.compile("/watch/(?P<watch_id>[^/]+)/(?P<command>.+)")
 
     def __init__(self, video_cache_manager, thimbinfo_server):
@@ -283,29 +283,14 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
         watch_id = match.group("watch_id")
         command = match.group("command")
 
-        if command != "save":
-            return None
-
         res = httpmes.HTTPResponse(
             ("HTTP/1.1", 200, "OK"))
         res.headers["Content-type"] = "text/plain ;charset=utf-8"
 
-        thumbinfo = self._thimbinfo_server.get(watch_id)
-
-        video_cache_pair = self.video_cache_manager.get_video_cache_pair(
-            thumbinfo.video_id[2:])
-        logs = []
-        for video_cache in video_cache_pair:
-            if video_cache.exists():
-                status_str = video_cache.update_info(
-                    video_id=thumbinfo.video_id,
-                    title=thumbinfo.title,
-                    filename_extension=thumbinfo.movie_type,
-                    subdir="save")
-                log = ("%s: %s %s\n" %
-                       (status_str, command,
-                        video_cache.info.make_cache_file_path()))
-                logs.append(log)
+        if hasattr(self, command):
+            logs = getattr(self, command)(watch_id)
+        else:
+            return None
 
         res_body = "NicoCacheAPI command results: \n" + ''.join(logs)
 
@@ -314,6 +299,66 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
         res.set_content_length()
 
         return ResponsePack(res, server_sockfile=server_sockfile)
+
+    def save(self, watch_id):
+        thumbinfo = self._thimbinfo_server.get(watch_id)
+        video_num = thumbinfo.video_id[2:]
+        video_cache_pair = self.video_cache_manager.get_video_cache_pair(
+            video_num)
+        logs = []
+        # dirty!!! 以下のofrループが各コマンドで殆どコピペなのをなんとかする
+        for video_cache in video_cache_pair:
+            if (video_cache.exists() and
+                    video_cache.info.subdir == os.path.normpath("")):
+
+                status_str = video_cache.update_info(
+                    video_id=thumbinfo.video_id,
+                    title=thumbinfo.title,
+                    filename_extension=thumbinfo.movie_type,
+                    subdir="save")
+                log = "%s: %s %s\n" % (status_str, "save",
+                                       video_cache.info.make_cache_file_path())
+                logs.append(log)
+
+        return logs
+
+    def unsave(self, watch_id):
+        thumbinfo = self._thimbinfo_server.get(watch_id)
+        video_num = thumbinfo.video_id[2:]
+        video_cache_pair = self.video_cache_manager.get_video_cache_pair(
+            video_num)
+        logs = []
+        for video_cache in video_cache_pair:
+            if (video_cache.exists() and
+                    video_cache.info.subdir == os.path.normpath("save")):
+
+                status_str = video_cache.update_info(
+                    video_id=thumbinfo.video_id,
+                    title="",
+                    filename_extension="",
+                    subdir="")
+                log = "%s: %s %s\n" % (status_str, "unsave",
+                                       video_cache.info.make_cache_file_path())
+                logs.append(log)
+
+        return logs
+
+    def remove(self, watch_id):
+        thumbinfo = self._thimbinfo_server.get(watch_id)
+        video_num = thumbinfo.video_id[2:]
+        video_cache_pair = self.video_cache_manager.get_video_cache_pair(
+            video_num)
+        logs = []
+        for video_cache in video_cache_pair:
+            if (video_cache.exists() and
+                    video_cache.info.subdir == os.path.normpath("")):
+
+                status_str = video_cache.remove()
+                log = "%s: %s %s\n" % (status_str, "remove",
+                                       video_cache.info.make_cache_file_path())
+                logs.append(log)
+
+        return logs
 
 
 class LocalURIHandler(proxy.ResponseServer):

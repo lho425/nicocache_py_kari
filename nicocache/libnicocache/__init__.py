@@ -295,9 +295,13 @@ class VideoCache(object):
             return "success"
 
         def command():
+            if not self.exists():
+                internal = "(internal)"
+            else:
+                internal = ""
             self._video_cache_file.update_cache_info(new_video_cache_info)
             self._logger.info(
-                "rename cache: %s",
+                "rename cache%s: %s", internal,
                 self._video_cache_file.info.make_cache_file_path())
         command.name = ("rename " +
                         self._video_cache_file.info.make_cache_file_path())
@@ -309,9 +313,13 @@ class VideoCache(object):
     def remove(self):
 
         def command():
+            if not self.exists():
+                internal = "(internal)"
+            else:
+                internal = ""
             self._video_cache_file.remove()
             self._logger.info(
-                "remove cache: %s",
+                "remove cache%s: %s", internal,
                 self._video_cache_file.info.make_cache_file_path())
         command.name = ("remove " +
                         self._video_cache_file.info.make_cache_file_path())
