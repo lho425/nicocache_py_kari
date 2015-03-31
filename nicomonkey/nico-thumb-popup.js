@@ -3,14 +3,11 @@
 // @include http://www.nicovideo.jp/*
 // ==/UserScript==
 
-//バグがあるかもしれません
-//ブラウザが暴走するかもしれません
-//ソースコードがあまり綺麗でない
-//コメントも少ない
+// 著者: 【ニコニコ】自動ローカル保存プロクシ NicoCache20 >>32氏 (http://anago.open2ch.net/test/read.cgi/software/1426235895/32)
+// ライセンス: パブリックドメイン(open2chへの投稿であったことに由来)
 
-var undefined;
-
-console.log("nico-thumb-popup");
+// 著者: LHO425
+// ライセンス: WTFPLv2
 
 window.nicoThumb = {};
 window.nicoThumb.debug = false;
@@ -21,225 +18,171 @@ function logger_debug(){
     }
 }
 
-var watchIdPattern = new RegExp(".*/watch/(..[\\d]+).*");
-
-
-var popupThumbWidth = 330;
-var popupThumbHeight = 196;
-var nicoThumb = document.createElement("div");
-nicoThumb.id = "nicoThumb";
-document.body.appendChild(nicoThumb);
-//nicoThumb.style.display = "none"
-var nicoThumbTable = {};// {"sm12345": thumbIframe;} を格納する
-// なぜこんなテーブルをつくるか？それは、getElementsBy云々を呼んでいちいち走査するよりもパソコンに負荷がかからないだろうという予想。
-// まあ、あんまり変わんないかも
-
-currentPopupThumb = null;
-
-// <a href="watch/sm1234" ...部分をポップアップするように書き換える
-function rewriteVideoLinkTagToPopup(getVideoLinkTags, getWatchIdFromVideoLinkTag){
-    var videoLinkTags = getVideoLinkTags();
-    var i;
-    
-    for (i=0; i<videoLinkTags.length; i++){
-	(function(){
-	    var videoLinkTag = videoLinkTags[i];
-
-	    videoLinkTag.addEventListener("mouseover", function(event){
-		popThumbOn(getWatchIdFromVideoLinkTag(videoLinkTag), event);
-	    }, false);
-	    videoLinkTag.setAttribute("onMouseOut", "return popThumbOff()");
-	})();
-    }
-}
-
-
+/***************** マウスオーバーを検知しポップアップを発動する部分 **********/
 (function(){
+    var nicoURLPattern = new RegExp("//(?!blog)(?:[^.]+.nicovideo.jp/(?:.*?%2F)?(watch|gate|community(?=/co)|mylist|user|channel(?=/ch)|seiga)|nico.ms)(?:/|%2F)((?=[1-9]|sm|nm|so|lv|co|ch|im|sg|mg)[a-z0-9]{2}[0-9]+)");
+    document.body.addEventListener("mouseover", function (event){
+	var target = event.target;
+	while (!/^(A|BODY)$/.test(target.tagName)) target = target.parentNode;
+	nicoURLMatch = nicoURLPattern.exec(target.href);
+	if (target.tagName === "A" && !target.onmouseover && nicoURLMatch) {
+	    var contentType = (nicoURLMatch[1] || "watch");
+	    var contentID = nicoURLMatch[2];
+	    popThumbOn(contentType, contentID, event);
+	    // 一度popupしたリンク要素はイベント登録。
+	    target.onmouseover = function(event){
+		popThumbOn(contentType, contentID, event);
+	    };
+	    target.onmouseout = function(){
+		// これがないと動画を移動した時に右上の投稿者のポップアップが前の投稿者のままになってしまう
+		target.onmouseover = null;
 
-    function rewriteVideoLinkTagInWatchDescription(){
-
-	return rewriteVideoLinkTagToPopup(
-	    function(){
-		return document.getElementsByClassName("watch"); 
-	    },
-	    function(videoLinkTag){
-		return videoLinkTag.textContent;
-	    });
-    }
-
-    var videoDescription = document.querySelector('p.videoDescription.description');
-    if (! videoDescription){
-	return;
-    }
-
-    rewriteVideoLinkTagInWatchDescription();
-
-    var mo = new MutationObserver(function(mutationRecords){
-	{
-            mutationRecords.forEach(function(mutation) {
-		rewriteVideoLinkTagInWatchDescription()
-	    });
-	    
+		popThumbOff();
+	    };
 	}
     });
-    mo.observe(videoDescription, {childList:true});
 })();
 
-/************* videoExplorer部分の書き換え ***************/
-(function(){
-    function rewriteVideoLinkTagInVideoExplorer(){
-
-	return rewriteVideoLinkTagToPopup(
-	    function(){
-		return document.querySelectorAll(".column4>a.link, .column1 a.link.title");
-	    },
-	    function(videoLinkTag){
-		return videoLinkTag.href.match(watchIdPattern)[1];
-	    });
-    }
-
-    var videoExplorerContent = document.querySelector('.videoExplorerContent');
-    if (! videoExplorerContent){
-	return;
-    }
-
-    rewriteVideoLinkTagInVideoExplorer();
-    
-    var mo = new MutationObserver(function(mutationRecords){
-	{
-            mutationRecords.forEach(function(mutation) {
-		if (mutation.target.getAttribute("class").startsWith("searchContent")){
-		    rewriteVideoLinkTagInVideoExplorer();
-		}
-	    });
-	    
-	}
-    });
-    mo.observe(videoExplorerContent, {childList:true, subtree :true});
-})();
-
-/************* videoExplorer以外の通常のリンクの書き換え ******************/
-function rewriteVideoLinkInNormalPage(){
-
-	return rewriteVideoLinkTagToPopup(
-	    function(){
-		var returnLinkTags = [];
-		var linkTags = document.getElementsByTagName("a");
-		var i;
-		for (i=0; i<linkTags.length; i++){
-		    var linkTag = linkTags[i];
-		    var href = linkTag.href;
-		    if ( href.startsWith("/watch") ||
-			   href.startsWith("http://www.nicovideo.jp/watch")){
-			
-			returnLinkTags.push(linkTag);
-		    }
-		}
-
-		return returnLinkTags;
-	    },
-	    function(videoLinkTag){
-		return videoLinkTag.href.match(watchIdPattern)[1];
-	    });
-    }
-rewriteVideoLinkInNormalPage();
 
 /***************** 実際にポップアップしてマウス追従したりするDOM部分 **********/
-function drawPopupThumb(drawPopupOnRight, topIntercept, event){
 
-    
-    var left;
+(function(){
+    var popupThumbWidth = 312;
+    var popupThumbHeight = 176;
+    var nicoThumb = document.createElement("div");
+    nicoThumb.id = "nicoThumb";
+    document.body.appendChild(nicoThumb);
+    //nicoThumb.style.display = "none"
+    var nicoThumbTable = {};// {"watch/sm12345": thumbIframe;} を格納する
+    // thumbIframeはサムネイルIFrameのelement
+    // なぜこんなテーブルをつくるか？それは、getElementsBy云々を呼んでいちいち走査するよりもパソコンに負荷がかからないだろうという予想から。
+    // まあ、あんまり変わんないかも
 
-    //カーソルがマウスオーバーした時点で、カーソル真ん中より左にあったときは、右にポップアップを表示するフラグが立っている
-    if (drawPopupOnRight){
-	left = window.scrollX + event.clientX + 30;
-    } else {
-	left = window.scrollX + event.clientX- 30 - popupThumbWidth;
-    }
-    currentPopupThumb.style.left = left + "px";
+    var currentPopupThumb = null;
+    var currentMouseMoveEventListener = null;
 
-    var top = ((window.scrollY + event.clientY) - 30 - popupThumbHeight) + topIntercept;
-    
-    currentPopupThumb.style.top = top + "px";
-    logger_debug("### drawPopupThumb dubug log ###");
-    logger_debug("window.scrollY", window.scrollY);
-    logger_debug("event.clientY", event.clientY);
-    logger_debug("drawPopupOnRight", drawPopupOnRight);
-    logger_debug("left" ,left);
-    logger_debug("topIntercept", topIntercept);
-    logger_debug("top", top);
-    
-}
 
-popThumbOn = function (watchId, event){
-    var thumbIframe = null;
-    for(var aWatchId in nicoThumbTable) {
-	if (watchId === aWatchId){
-	    thumbIframe = nicoThumbTable[watchId];
-	    break;
+    function drawPopupThumb(drawPopupOnRight, topIntercept, event){
+
+	
+	var left;
+
+	//カーソルがマウスオーバーした時点で、カーソル真ん中より左にあったときは、右にポップアップを表示するフラグが立っている
+	if (drawPopupOnRight){
+	    left = window.scrollX + event.clientX + 20;
+	} else {
+	    left = window.scrollX + event.clientX- 20 - popupThumbWidth;
 	}
+	currentPopupThumb.style.left = left + "px";
+
+	var top = ((window.scrollY + event.clientY) - 20 - popupThumbHeight) + topIntercept;
+	
+	currentPopupThumb.style.top = top + "px";
+	logger_debug("### drawPopupThumb dubug log ###");
+	logger_debug("window.scrollY", window.scrollY);
+	logger_debug("event.clientY", event.clientY);
+	logger_debug("drawPopupOnRight", drawPopupOnRight);
+	logger_debug("left" ,left);
+	logger_debug("topIntercept", topIntercept);
+	logger_debug("top", top);
+	
     }
 
-    if (thumbIframe === null){
-	thumbIframe = document.createElement("iframe");
-	thumbIframe.style.display = "none";
-	thumbIframe.style.width = popupThumbWidth + "px";
-	thumbIframe.style.height = popupThumbHeight +"px";
-	thumbIframe.style.zIndex = 10000;
-	thumbIframe.style.position = "absolute";
-	thumbIframe.src = "http://ext.nicovideo.jp/thumb/" + watchId;
+    function getThumbIframe(contentType, contentID){
+	var path = contentType + "/" + contentID;
+	var thumbIframe = null;
+	for(var aPath in nicoThumbTable) {
+	    if (path === aPath){
+		thumbIframe = nicoThumbTable[path];
+		break;
+	    }
+	}
 
-	nicoThumb.appendChild(thumbIframe);
-	nicoThumbTable[watchId] = thumbIframe;	
+	if (thumbIframe === null){
+	    thumbIframe = document.createElement("iframe");
+	    thumbIframe.style.display = "none";
+	    //ココらへんはcssでやるべきだけど、なんか上手くいかないので、ニコ動公式のiframe埋め込みの通りに属性を設定してやる
+	    thumbIframe.width = popupThumbWidth;
+	    thumbIframe.height = popupThumbHeight;
+	    thumbIframe.scrolling = "no";
+	    thumbIframe.frameborder = "0";
+	    thumbIframe.style.zIndex = 10000;
+	    thumbIframe.style.position = "absolute";
+
+	    var host = "ext.nicovideo.jp";
+	    var thumbIframePath;
+	    if(contentType == "watch"){
+		if(contentID.startsWith("lv")){
+		    host = "live.nicovideo.jp";
+		    thumbIframePath = "/embed/" + contentID;
+		}else{
+		    thumbIframePath = "/thumb/" + contentID;
+		}
+	    }else if(/^(mylist|user|community|channel)$/.test(contentType)){
+		thumbIframePath = "/thumb_" + contentType + "/" + contentID;
+	    }else if(contentType == "seiga"){
+		host = "ext.seiga.nicovideo.jp";
+		thumbIframePath = "/thumb/" + contentID;
+	    }else{
+		console.log("nico-thumb-popup: unknown content:", contentType + "/" + contentID);
+		thumbIframePath = "/thumb/" + contentID;
+	    }
+	    thumbIframe.src = "http://" + host + "/" + thumbIframePath;
+	    nicoThumb.appendChild(thumbIframe);
+	    nicoThumbTable[path] = thumbIframe;	
+	}
+	return thumbIframe;
     }
 
+    window.popThumbOn = function(contentType, contentID, event){
+	var thumbIframe = getThumbIframe(contentType, contentID);
+	
+	currentPopupThumb = thumbIframe;
+	currentPopupThumb.style.display = "";
 
-    currentPopupThumb = thumbIframe;
-    currentPopupThumb.style.display = "";
+	var drawPopupOnRight;
+	//カーソルが真ん中より左にあるときは、右にポップアップを表示する
+	//マウスオーバーした時点で決める
+	if (event.clientX < window.innerWidth/2){
+	    drawPopupOnRight = true;
+	}else{
+	    drawPopupOnRight = false;
+	}
 
-    var drawPopupOnRight;
-    //カーソルが真ん中より左にあるときは、右にポップアップを表示する
-    //マウスオーバーした時点で決める
-    if (event.clientX < window.innerWidth/2){
-	drawPopupOnRight = true;
-    }else{
-	drawPopupOnRight = false;
+	// =======================ページの一番上==
+	//    A
+	//  window.scrollY              ---------popupのtop--
+	//    V                                  |はみ出た分           |
+	// --------ブラウザで表示してる一番上端-------|--                 |
+
+
+	var topIntercept = 0; // topの切片
+	//上にはみ出ていたら、はみ出ている分+αを下にずらす、つまりy座標を増やす
+	//下にずらす分はマウスオーバーした時点で決める
+	//ポップアップのtop座標 = (カーソルのページの一番上からの距離) - (カーソルより上にポップアップして欲しいので、上にずらす分) - (カーソルから少し離す分)
+	//=(window.scrollY + event.clientY) - popupThumbHeight - 30
+	//はみ出た分 = window.scrollY - top  = - (event.clientY - popupThumbHeight - 30)
+	var extra = -(event.clientY - popupThumbHeight - 30);
+	if ( extra > 0){
+	    //上にはみ出ていたら、はみ出ている分+αを下にずらす、つまりtop座標を増やす
+	    topIntercept = extra + 45;
+	}
+
+	logger_debug("### popThumbOn dubug log ###");
+	logger_debug("event.clientY", event.clientY);
+	logger_debug("popupThumbHeight", popupThumbHeight);
+	logger_debug("-(event.clientY - popupThumbHeight - 30)", extra);
+	logger_debug("-(event.clientY - popupThumbHeight - 30) > 0", extra > 0);
+	logger_debug("topIntercept", topIntercept);
+
+	currentMouseMoveEventListener = function(event){
+	    drawPopupThumb(drawPopupOnRight, topIntercept, event);
+	};
+	document.addEventListener("mousemove", currentMouseMoveEventListener, false);
+    };
+
+    window.popThumbOff = function() {
+	currentPopupThumb.style.display = "none";
+	document.removeEventListener("mousemove", currentMouseMoveEventListener, false);
     }
-
-    // =======================ページの一番上==
-    //    A
-    //  window.scrollY              ---------popupのtop--
-    //    V                                  |はみ出た分           |
-    // --------ブラウザで表示してる一番上端-------|--                 |
-
-
-    var topIntercept = 0; // topの切片
-    //上にはみ出ていたら、はみ出ている分+αを下にずらす、つまりy座標を増やす
-    //下にずらす分はマウスオーバーした時点で決める
-    //ポップアップのtop座標 = (カーソルのページの一番上からの距離) - (カーソルより上にポップアップして欲しいので、上にずらす分) - (カーソルから少し離す分)
-    //=(window.scrollY + event.clientY) - popupThumbHeight - 30
-    //はみ出た分 = window.scrollY - top  = - (event.clientY - popupThumbHeight - 30)
-    var extra = -(event.clientY - popupThumbHeight - 30);
-    if ( extra > 0){
-	//上にはみ出ていたら、はみ出ている分+αを下にずらす、つまりtop座標を増やす
-	topIntercept = extra + 45;
-    }
-
-    logger_debug("### popThumbOn dubug log ###");
-    logger_debug("event.clientY", event.clientY);
-    logger_debug("popupThumbHeight", popupThumbHeight);
-    logger_debug("-(event.clientY - popupThumbHeight - 30)", extra);
-    logger_debug("-(event.clientY - popupThumbHeight - 30) > 0", extra > 0);
-    logger_debug("topIntercept", topIntercept);
-
-
-    // todo!!! この実装だとイベントが1つしか登録できなくて、他のイベントが登録できないので、addEventListennerを使うように変更
-    document.onmousemove = function(event){
-	drawPopupThumb(drawPopupOnRight, topIntercept, event);
-    }
-};
-
-popThumbOff = function() {
-    currentPopupThumb.style.display = "none";
-     document.onmousemove = null;// todo!!! event
-};
+})();
