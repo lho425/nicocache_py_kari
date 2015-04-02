@@ -81,6 +81,8 @@ class NicoCacheConfig(object):
         self.proxy_host = getattr(config, "proxy_host", "")
         self.proxy_port = getattr(config, "proxy_host", 8080)
 
+        self.dircache = getattr(config, "dircache", False)
+
 
 def load_config():
     import config
@@ -441,7 +443,12 @@ def main():
     logger.info("initializing")
 
     # ファクトリやらシングルトンやらの初期化
-    filesystem_wrapper = libnicocache.pathutil.FileSystemWrapper()
+    if config.dircache:
+        filesystem_wrapper = libnicocache.pathutil.DirCachingFileSystemWrapper(
+            cache_dir_path)
+    else:
+        filesystem_wrapper = libnicocache.pathutil.FileSystemWrapper()
+
     video_cache_file_manager = libnicocache.VideoCacheFileManager(
         filesystem_wrapper, libnicocache.VideoCacheFile)
 
