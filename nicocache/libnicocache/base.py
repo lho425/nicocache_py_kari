@@ -12,6 +12,14 @@ def _if_not_None_else(newvalue, basevalue):
     return newvalue if newvalue is not None else basevalue
 
 
+def _get_slash_alternative(string):
+    if isinstance(string, unicode):
+        return u"／"
+
+    else:
+        return "／"
+
+
 class NicoVideoTypeTable:
 
     """動画ファイルのURL(http://smile-fnl21.nicovideo.jp/smile?m=24992647.47688lowとか)
@@ -74,6 +82,9 @@ class VideoCacheInfo(_VideoCacheInfo):
         if rootdir is not None:
             rootdir = os.path.normpath(rootdir)
 
+        if title is not None:
+            title = title.replace("/", _get_slash_alternative(title))
+
         return _VideoCacheInfo.__new__(
             cls, video_type, video_num, tmp, low,
             filename_extension, title, subdir, rootdir)
@@ -127,6 +138,11 @@ class VideoCacheInfo(_VideoCacheInfo):
             kwargs["video_num"] = video_id[2:]
             del kwargs["video_id"]
 
+        title = kwargs.get("title", None)
+        # todo!!! titleやvideo_idはいろんなところでコード重複しているので、リファクタリングする
+        if title is not None:
+            kwargs["title"] = title.replace("/", _get_slash_alternative(title))
+
         return self._replace(**kwargs)
 
     def update(self, new_video_cache_info):
@@ -161,7 +177,8 @@ class VideoCacheInfo(_VideoCacheInfo):
             low = True
 
         if match.group("_title"):
-            title = match.group("_title")[1:]  # _(アンダーバー)もタイトルにマッチしてしまうので[1:]とする
+            # _(アンダーバー)もタイトルにマッチしてしまうので[1:]とする
+            title = match.group("_title")[1:]
 
         return cls(
             video_type, video_num,
