@@ -23,6 +23,14 @@ import importlib
 import pkgutil
 import locale
 import shutil
+import sys
+
+
+if sys.version_info.major == 2:
+    from ConfigParser import RawConfigParser
+else:
+    from configparser import RawConfigParser
+
 
 import proxtheta.server
 import proxtheta.utility.client
@@ -60,8 +68,6 @@ def makeVideoCacheGuessVideoTypeMixin(VideoCacheClass):
 
     return VideoCacheGuessVideoType
 
-VideoCache = makeVideoCacheGuessVideoTypeMixin(libnicocache.VideoCache)
-
 
 def makeVideoCacheTitleMixin(VideoCacheClass):
     class VideoCacheWithTitle(VideoCacheClass):
@@ -76,38 +82,90 @@ def makeVideoCacheTitleMixin(VideoCacheClass):
 class ConfigLoader(object):
 
     def __init__(self):
-        import config
-        self._config = config
+        self._config = None
         self._config_mtime = 0#os.path.getmtime("config.py")
 
-        self._default_global_config = {
-            "listenPort": 8080,
-            "proxyHost": "",
-            "proxyPort": 8080,
-            "dirCache": False
-        }
+        self._load_config()
 
-    def get_config(self, key, default_value=None, value_type=0):
-        config_mtime = os.path.getmtime("config.py")
+    def _reload_config_if_modified(self):
+        config_mtime = os.path.getmtime("config.conf")
         if config_mtime != self._config_mtime:
             logger.info("reload config")
-            reload(self._config)
+            self._load_config()
             self._config_mtime = config_mtime
 
-        value = getattr(self._config, key, default_value)
-        if value is None:
-            value = self._default_global_config.get(key, default_value)
+    def _load_config(self):
+        self._config = RawConfigParser()
+        self._config.read("config.conf")
 
-        return value
+    def get_config(
+            self, section, key, defaults={}):
 
+        self._reload_config_if_modified()
 
+        if self._config.has_option(section, key):
+            return self._config.get(section, key)
+        else:
+            return defaults[key]
+
+    def get_config_int(
+            self, section, key, defaults={}):
+
+        self._reload_config_if_modified()
+
+        if self._config.has_option(section, key):
+            return self._config.getint(section, key)
+        else:
+            return defaults[key]
+
+    def get_config_float(
+            self, section, key, defaults={}):
+
+        self._reload_config_if_modified()
+
+        if self._config.has_option(section, key):
+            return self._config.getfloat(section, key)
+        else:
+            return defaults[key]
+
+    def get_config_bool(
+            self, section, key, defaults={}):
+
+        self._reload_config_if_modified()
+
+        if self._config.has_option(section, key):
+            return self._config.getboolean(section, key)
+        else:
+            return defaults[key]
 #def get_config(key, value_type, default_value=None):
 
-_config_loader = ConfigLoader()
+_config_loader = None
 
 
-def get_config(key, default_value=None):
-    return _config_loader.get_config(key, default_value)
+def _init_config():
+    global _config_loader
+    if not os.path.exists("./config.conf"):
+        shutil.copyfile(os.path.join(
+            os.path.dirname(__file__), "config.conf.template"),
+            "./config.conf")
+
+    _config_loader = ConfigLoader()
+
+
+def get_config(section, key, defaults={}):
+    return _config_loader.get_config(section, key, defaults)
+
+
+def get_config_int(section, key, defaults={}):
+    return _config_loader.get_config_int(section, key, defaults)
+
+
+def get_config_float(section, key, defaults={}):
+    return _config_loader.get_config_float(section, key, defaults)
+
+
+def get_config_bool(section, key, defaults={}):
+    return _config_loader.get_config_bool(section, key, defaults)
 
 
 def makeVideoCacheAutoRemoveMixin(VideoCacheClass):
@@ -143,18 +201,42 @@ class Extension(object):
 
         self.response_server = None
 
+_default_global_config = {
+    "listenPort": 8080,
+    "proxyHost": "",
+    "proxyPort": 8080,
+    "dirCache": False,
+    "touchCache": True
+}
+
+
+def makeVideoCacheTouchCacheMixin(VideoCacheClass):
+    class VideoCacheTouchCacheMixin(VideoCacheClass):
+
+        def _make_http_video_resource_with_comlete_localcache(
+                self, server_sockfile):
+            if get_config_bool("global", "touchCache", _default_global_config):
+                logger.debug("touch %s", self.info.make_cache_file_path())
+                self._video_cache_file.touch()
+
+            return VideoCacheClass.\
+                _make_http_video_resource_with_comlete_localcache(
+                    self, server_sockfile)
+
+    return VideoCacheTouchCacheMixin
+
+
+VideoCache = makeVideoCacheTouchCacheMixin(
+    makeVideoCacheGuessVideoTypeMixin(libnicocache.VideoCache))
+
 
 class NicoCache(object):
 
     """おそらくnicocache.pyが起動したら一つ出来るであろうシングルトン"""
 
     def __init__(self, **kwargs):
-        """secondary_proxy_addr: ((host, port)のtuple, None)
-            Noneの場合secondary proxyを通さない
-            (host, port)が設定されればそこを経由する
-        secondary_proxy_addr が Noneでないなら"""
+
         self.video_cache_manager = None
-        self.secondary_proxy_addr = None
         self.nonproxy_camouflage = True
         self.complete_cache = False
         self.logger = logger
@@ -165,26 +247,35 @@ class NicoCache(object):
                                 nonproxy_camouflage=None):
         """proxtheta.utility.client.get_http_resource()
         を呼び出す前の前処理、非プロクシ偽装
-        (host, port)は__init__で設定されたセカンダリproxyを使うか、reqから推測される
+        (host, port)はconfig.confで設定されたセカンダリproxyを使うか、reqから推測される
         =Noneとなっているパラメータは、__init__で設定された値がデフォルトで使われる
         __init__でセカンダリproxyが設定されている場合と、されていない場合で
         nonproxy_camouflage=Trueのときの挙動が異なる
         後者の場合、GET http://host:8080/ ...はGET / ...となるが、前者だと変更されない
         どちらの場合もhop by hop ヘッダは削除される"""
+        secondary_proxy_host = get_config(
+            "global", "proxyHost", _default_global_config)
+        if secondary_proxy_host:
+            secondary_proxy_addr = core.common.Address(
+                (secondary_proxy_host, get_config_int(
+                    "global", "proxyPort", _default_global_config)))
+        else:
+            secondary_proxy_addr = None
+        del secondary_proxy_host
 
         nonproxy_camouflage = (nonproxy_camouflage
                                if nonproxy_camouflage is not None
                                else self.nonproxy_camouflage)
 
-        if self.secondary_proxy_addr:
-            (host, port) = self.secondary_proxy_addr
+        if secondary_proxy_addr:
+            (host, port) = secondary_proxy_addr
         else:
             (host, port) = (req.host, req.port)
 
         if nonproxy_camouflage:
             req = deepcopy(req)
             httpmes.remove_hop_by_hop_header(req)
-            if not self.secondary_proxy_addr:
+            if not secondary_proxy_addr:
                 httpmes.remove_scheme_and_authority(req)
 
         return ((host, port), req)
@@ -437,19 +528,10 @@ def main():
         "guessed system default encoding: %s", locale.getpreferredencoding())
     logger.info(u"ニコキャッシュ.py(仮)")
 
-    if not os.path.exists("./config.py"):
-        shutil.copyfile(os.path.join(
-            os.path.dirname(__file__), "config.py.template"), "./config.py")
+    _init_config()
 
-    port = get_config("listenPort")
+    port = get_config_int("global", "listenPort", _default_global_config)
     complete_cache = False
-    secondary_proxy_host = get_config("proxyHost")
-    if secondary_proxy_host:
-        secondary_proxy_addr = core.common.Address(
-            (secondary_proxy_host, get_config("proxyPort")))
-    else:
-        secondary_proxy_addr = None
-    del secondary_proxy_host
 
     nonproxy_camouflage = True
 
@@ -464,7 +546,7 @@ def main():
     logger.info("initializing")
 
     # ファクトリやらシングルトンやらの初期化
-    if get_config("dirCache"):
+    if get_config_bool("global", "dirCache", _default_global_config):
         filesystem_wrapper = libnicocache.pathutil.DirCachingFileSystemWrapper(
             cache_dir_path)
     else:
@@ -480,7 +562,6 @@ def main():
     video_info_rewriter = rewriter.Rewriter(video_cache_manager)
 
     nicocache.video_cache_manager = video_cache_manager
-    nicocache.secondary_proxy_addr = secondary_proxy_addr
     nicocache.nonproxy_camouflage = nonproxy_camouflage
     nicocache.complete_cache = complete_cache
 
