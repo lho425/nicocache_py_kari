@@ -73,21 +73,41 @@ def makeVideoCacheTitleMixin(VideoCacheClass):
     return VideoCacheWithTitle
 
 
-class NicoCacheConfig(object):
+class ConfigLoader(object):
 
-    def __init__(self, config):
-        self.listen_port = getattr(config, "listen_port", 8080)
-        # セカンダリプロクシ
-        self.proxy_host = getattr(config, "proxy_host", "")
-        self.proxy_port = getattr(config, "proxy_host", 8080)
+    def __init__(self):
+        import config
+        self._config = config
+        self._config_mtime = 0#os.path.getmtime("config.py")
 
-        self.dircache = getattr(config, "dircache", False)
+        self._default_global_config = {
+            "listenPort": 8080,
+            "proxyHost": "",
+            "proxyPort": 8080,
+            "dirCache": False
+        }
+
+    def get_config(self, key, default_value=None, value_type=0):
+        config_mtime = os.path.getmtime("config.py")
+        if config_mtime != self._config_mtime:
+            logger.info("reload config")
+            reload(self._config)
+            self._config_mtime = config_mtime
+
+        value = getattr(self._config, key, default_value)
+        if value is None:
+            value = self._default_global_config.get(key, default_value)
+
+        return value
 
 
-def load_config():
-    import config
-    reload(config)
-    return NicoCacheConfig(config)
+#def get_config(key, value_type, default_value=None):
+
+_config_loader = ConfigLoader()
+
+
+def get_config(key, default_value=None):
+    return _config_loader.get_config(key, default_value)
 
 
 def makeVideoCacheAutoRemoveMixin(VideoCacheClass):
@@ -103,7 +123,7 @@ def makeVideoCacheAutoRemoveMixin(VideoCacheClass):
 
         def make_http_video_resource(
                 self, req, http_resource_getter_func, server_sockfile):
-            config = load_config()  # 直にグローバル関数を呼んでいるので注意
+            # config = load_config()  # 直にグローバル関数を呼んでいるので注意
             raise NotImplementedError
 
     return VideoCacheWithAutoRemoving
@@ -421,14 +441,16 @@ def main():
         shutil.copyfile(os.path.join(
             os.path.dirname(__file__), "config.py.template"), "./config.py")
 
-    config = load_config()
-    port = config.listen_port
+    port = get_config("listenPort")
     complete_cache = False
-    if config.proxy_host:
+    secondary_proxy_host = get_config("proxyHost")
+    if secondary_proxy_host:
         secondary_proxy_addr = core.common.Address(
-            (config.proxy_host, config.proxy_port))
+            (secondary_proxy_host, get_config("proxyPort")))
     else:
         secondary_proxy_addr = None
+    del secondary_proxy_host
+
     nonproxy_camouflage = True
 
     cache_dir_path = "./cache"
@@ -442,7 +464,7 @@ def main():
     logger.info("initializing")
 
     # ファクトリやらシングルトンやらの初期化
-    if config.dircache:
+    if get_config("dirCache"):
         filesystem_wrapper = libnicocache.pathutil.DirCachingFileSystemWrapper(
             cache_dir_path)
     else:
