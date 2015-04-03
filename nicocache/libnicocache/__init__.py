@@ -287,7 +287,7 @@ class VideoCache(object):
             command()
         except WindowsError as e:
             # 32は使用中でアクセスできないエラー
-            if e.errno != 32:
+            if e.winerror != 32:
                 raise
 
             self._logger.info("command failed: %s", command.name)
