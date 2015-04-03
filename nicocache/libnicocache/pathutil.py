@@ -14,10 +14,16 @@ class FileSystemWrapper(object):
         return self._walk(top, topdown, onerror, followlinks)
 
     def rename(self, oldpath, newpath):
-        os.rename(oldpath, newpath)
+        try:
+            return os.rename(oldpath, newpath)
+        except OSError as e:
+            raise OSError(e.errno, e, oldpath, newpath)
 
     def remove(self, path):
-        os.remove(path)
+        try:
+            return os.remove(path)
+        except OSError as e:
+            raise OSError(e.errno, e, path)
 
     def open(self, path, mode="rb"):
         try:
@@ -174,7 +180,7 @@ class DirCachingFileSystemWrapper(FileSystemWrapper):
             raise NotImplementedError(
                 "renaming or removing directory is not implemented")
 
-        os.rename(oldpath, newpath)
+        FileSystemWrapper.rename(self, oldpath, newpath)
         # if os.rename failed(raised), dir entry of walker will not be updated.
 
         self._caching_walker.rename_file(oldpath, newpath)
@@ -184,6 +190,6 @@ class DirCachingFileSystemWrapper(FileSystemWrapper):
             raise NotImplementedError(
                 "renaming or removing directory is not implemented")
 
-        os.remove(path)
+        FileSystemWrapper.remove(self, path)
 
         self._caching_walker.remove_file(path)

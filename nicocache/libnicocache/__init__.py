@@ -59,6 +59,12 @@ logger = _logging.getLogger(__name__)
 #     """Type Define"""
 #     logger = _logging.Logger()
 
+try:
+    WindowsError
+except NameError:
+    class WindowsError(Exception):
+        pass
+
 
 def parse_nicovideo_request_query(query):
     """ニコニコ動画の動画サーバへのリクエストのクエリから、
@@ -279,7 +285,11 @@ class VideoCache(object):
         commandが例外を投げる場合、video_cacheのon_close_commandsに予約される"""
         try:
             command()
-        except:
+        except WindowsError as e:
+            # 32は使用中でアクセスできないエラー
+            if e.errno != 32:
+                raise
+
             self._logger.info("command failed: %s", command.name)
             if not hasattr(self._video_cache_file, "on_close_commands"):
                 self._video_cache_file.on_close_commands = []
