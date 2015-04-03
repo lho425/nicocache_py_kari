@@ -14,22 +14,13 @@ class FileSystemWrapper(object):
         return self._walk(top, topdown, onerror, followlinks)
 
     def rename(self, oldpath, newpath):
-        try:
-            return os.rename(oldpath, newpath)
-        except OSError as e:
-            raise OSError(e.errno, e, oldpath, newpath)
+        return os.rename(oldpath, newpath)
 
     def remove(self, path):
-        try:
-            return os.remove(path)
-        except OSError as e:
-            raise OSError(e.errno, e, path)
+        return os.remove(path)
 
     def open(self, path, mode="rb"):
-        try:
-            return open(path, mode)
-        except IOError as e:
-            raise IOError(e.errno, e, mode)
+        return open(path, mode)
 
     def getmtime(self, path):
         return os.path.getmtime(path)
