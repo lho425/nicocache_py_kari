@@ -280,7 +280,6 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
                 bool(self.pattern.match(req.path)))
 
     def serve(self, req, server_sockfile, info):
-        """とりあえずsaveだけ"""
         match = self.pattern.match(req.path)
         watch_id = match.group("watch_id")
         command = match.group("command")
