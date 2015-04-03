@@ -83,13 +83,29 @@ class DirCahingWalker:
 
         pathlist = []
         for (dirpath, dirnames, filenames) in self._pathlist:
+            if not os.path.exists(dirpath):
+                continue
+
             if self._getmtime(dirpath) != self._dir_mtime[dirpath]:
                 logger.info("directory changed: %s", dirpath)
+                old_dirnames_set = set(dirnames)
                 (dirpath, dirnames, filenames) = next(self._real_walk(
                     dirpath, self._topdown, self._onerror, self._followlinks))
-
                 self._dir_mtime[dirpath] = self._getmtime(dirpath)
-                # この実装だとdirpath以下のsubdirを削除等した場合変なことがおこるだろう
+                pathlist.append((dirpath, dirnames, filenames))
+
+                new_dirnames_set = set(dirnames)
+                added_dirnames_set = new_dirnames_set - old_dirnames_set
+
+                for dirname in added_dirnames_set:
+                    for (dirpath, dirnames, filenames)in self._real_walk(
+                            os.path.join(dirpath, dirname), self._topdown,
+                            self._onerror, self._followlinks):
+
+                        self._dir_mtime[dirpath] = self._getmtime(dirpath)
+                        pathlist.append((dirpath, dirnames, filenames))
+
+                continue
 
             pathlist.append((dirpath, dirnames, filenames))
 
