@@ -24,6 +24,7 @@ import pkgutil
 import locale
 import shutil
 import sys
+from libnicocache.base import VideoCacheInfo
 
 
 if sys.version_info.major == 2:
@@ -227,8 +228,51 @@ def makeVideoCacheTouchCacheMixin(VideoCacheClass):
     return VideoCacheTouchCacheMixin
 
 
+def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
+    class VideoCacheAutoSaveAndRemove(VideoCacheClass):
+
+        """lowキャッシュがsaveされていた場合、非lowキャッシュも新規作成時に自動的にsaveする
+        また、非lowキャッシュがcompleteしたときに、lowキャッシュがあったら消す"""
+
+        def make_http_video_resource(
+                self, req, http_resource_getter_func, server_sockfile):
+            global nicocache
+
+            low_cache = nicocache.video_cache_manager.get_video_cache(
+                video_num=self.info.video_num, low=True)
+
+            if low_cache.exists():
+                if (not self.exists() and
+                        low_cache.info.subdir.startswith("save")):
+                    # todo!!! saveがハードコードしているので、解消する
+                    self.update_info(
+                        **low_cache.info.replace(tmp=True, low=False)._asdict())
+            else:
+                low_cache = None
+
+            respack = VideoCacheClass.make_http_video_resource(
+                self, req, http_resource_getter_func, server_sockfile)
+
+            if isinstance(respack.body_file, self._NicoCachingReader):
+                respack.body_file._low_cache = low_cache
+
+            return respack
+
+        class _NicoCachingReader(VideoCacheClass._NicoCachingReader):
+
+            def close(self):
+                VideoCacheClass._NicoCachingReader.close(self)
+
+                if self._left_size == 0 and self._low_cache is not None:
+                    self._low_cache.remove()
+
+    return VideoCacheAutoSaveAndRemove
+
+
 VideoCache = makeVideoCacheTouchCacheMixin(
     makeVideoCacheGuessVideoTypeMixin(libnicocache.VideoCache))
+
+VideoCache = makeVideoCacheAutoSaveAndRemoveMixin(VideoCache)
 
 
 class NicoCache(object):
