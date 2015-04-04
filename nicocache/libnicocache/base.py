@@ -5,9 +5,6 @@ import os
 import re
 
 
-root_cache_dir = "cache"
-
-
 def _if_not_None_else(newvalue, basevalue):
     return newvalue if newvalue is not None else basevalue
 

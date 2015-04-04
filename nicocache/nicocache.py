@@ -206,7 +206,8 @@ _default_global_config = {
     "proxyHost": "",
     "proxyPort": 8080,
     "dirCache": False,
-    "touchCache": True
+    "touchCache": True,
+    "cacheFolder": ""  # デフォルトは./cacheだが、それはこの項目を参照するときに""かどうかで判断する
 }
 
 
@@ -535,13 +536,15 @@ def main():
 
     nonproxy_camouflage = True
 
-    cache_dir_path = "./cache"
-    if not os.path.isdir(cache_dir_path):
-        os.mkdir(cache_dir_path)
+    cache_dir_path = get_config(
+        "global", "cacheFolder", _default_global_config) or "./cache"
 
-    save_dir_path = "./cache/save"
+    if not os.path.isdir(cache_dir_path):
+        os.makedirs(cache_dir_path)
+
+    save_dir_path = os.path.join(cache_dir_path, "save")
     if not os.path.isdir(save_dir_path):
-        os.mkdir(save_dir_path)
+        os.makedirs(save_dir_path)
 
     logger.info("initializing")
 
