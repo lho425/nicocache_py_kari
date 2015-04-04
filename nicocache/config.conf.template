@@ -30,3 +30,11 @@ listenPort = 8080
 # 標準の設定 (cache) を使用する場合は指定しないかコメントアウトしてください
 # デフォルト値: ""
 #cacheFolder=
+
+# エコノミーキャッシュがsaveされていた場合、新規作成された非エコノミーキャッシュも最初からsavaされた状態にしておく [S]
+# デフォルト値: true
+#autoSave=true
+
+# 非lowキャッシュがcompleteしたときにlowキャッシュがあったらremoveする
+# デフォルト値: true
+#autoRemoveLow=true

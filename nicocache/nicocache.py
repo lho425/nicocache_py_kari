@@ -208,7 +208,9 @@ _default_global_config = {
     "proxyPort": 8080,
     "dirCache": False,
     "touchCache": True,
-    "cacheFolder": ""  # デフォルトは./cacheだが、それはこの項目を参照するときに""かどうかで判断する
+    "cacheFolder": "",  # デフォルトは./cacheだが、それはこの項目を参照するときに""かどうかで判断する
+    "autoSave": True,
+    "autoRemoveLow": True,
 }
 
 
@@ -243,7 +245,10 @@ def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
 
             if low_cache.exists():
                 if (not self.exists() and
-                        low_cache.info.subdir.startswith("save")):
+                    low_cache.info.subdir.startswith("save") and
+                    get_config_bool(
+                        "global", "autoSave", _default_global_config)):
+
                     # todo!!! saveがハードコードしているので、解消する
                     self.update_info(
                         **low_cache.info.replace(tmp=True, low=False)._asdict())
@@ -263,7 +268,9 @@ def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
             def close(self):
                 VideoCacheClass._NicoCachingReader.close(self)
 
-                if self._left_size == 0 and self._low_cache is not None:
+                if (self._left_size == 0 and self._low_cache is not None and
+                    get_config_bool(
+                        "global", "autoRemoveLow", _default_global_config)):
                     self._low_cache.remove()
 
     return VideoCacheAutoSaveAndRemove
