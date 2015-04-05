@@ -66,12 +66,7 @@ class DirCahingWalker:
             else:
                 raise
 
-    def walk(self, top, topdown=True, onerror=None, followlinks=False):
-        if os.path.normpath(top) != self._top_dir:
-            # todo!!! 他の引数も__init__で渡されたのと等しいかチェックすべし
-            raise NotImplementedError(
-                "top must be top of given on DirCahingWalker.__init__()")
-
+    def update_pathlist_if_modified(self):
         pathlist = []
         for (dirpath, dirnames, filenames) in self._pathlist:
             if not os.path.exists(dirpath):
@@ -101,6 +96,13 @@ class DirCahingWalker:
             pathlist.append((dirpath, dirnames, filenames))
 
         self._pathlist = pathlist
+
+    def walk(self, top, topdown=True, onerror=None, followlinks=False):
+        if os.path.normpath(top) != self._top_dir:
+            # todo!!! 他の引数も__init__で渡されたのと等しいかチェックすべし
+            raise NotImplementedError(
+                "top must be top of given on DirCahingWalker.__init__()")
+
         return self._pathlist
 
     def rename_file(self, oldpath, newpath):
@@ -173,9 +175,12 @@ class DirCachingFileSystemWrapper(FileSystemWrapper):
         FileSystemWrapper.__init__(self, self._caching_walker.walk)
 
     def walk(self, top, topdown=True, onerror=None, followlinks=False):
+
+        self._caching_walker.update_pathlist_if_modified()
         return self._caching_walker.walk(top, topdown, onerror, followlinks)
 
     def open(self, path, mode="rb"):
+        self._caching_walker.update_pathlist_if_modified()
         fileobj = FileSystemWrapper.open(self, path, mode=mode)
         if mode.startswith("w"):
             self._caching_walker.append_file(path)
@@ -187,6 +192,7 @@ class DirCachingFileSystemWrapper(FileSystemWrapper):
             raise NotImplementedError(
                 "renaming or removing directory is not implemented")
 
+        self._caching_walker.update_pathlist_if_modified()
         FileSystemWrapper.rename(self, oldpath, newpath)
         # if os.rename failed(raised), dir entry of walker will not be updated.
 
@@ -197,6 +203,7 @@ class DirCachingFileSystemWrapper(FileSystemWrapper):
             raise NotImplementedError(
                 "renaming or removing directory is not implemented")
 
+        self._caching_walker.update_pathlist_if_modified()
         FileSystemWrapper.remove(self, path)
 
         self._caching_walker.remove_file(path)
