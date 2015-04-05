@@ -74,6 +74,7 @@ class DirCahingWalker:
 
             if self._getmtime(dirpath) != self._dir_mtime[dirpath]:
                 logger.info("directory changed: %s", dirpath)
+                logger.info("update file list cache")
                 old_dirnames_set = set(dirnames)
                 (dirpath, dirnames, filenames) = next(self._real_walk(
                     dirpath, self._topdown, self._onerror, self._followlinks))
@@ -91,6 +92,7 @@ class DirCahingWalker:
                         self._dir_mtime[dirpath] = self._getmtime(dirpath)
                         pathlist.append((dirpath, dirnames, filenames))
 
+                logger.info("finish updating file list cache")
                 continue
 
             pathlist.append((dirpath, dirnames, filenames))
