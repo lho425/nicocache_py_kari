@@ -31,6 +31,7 @@ import pkgutil
 import locale
 import shutil
 import weakref
+import threading
 
 import proxtheta.server
 import proxtheta.utility.client
@@ -292,6 +293,8 @@ class VideoCache(object):
 
             self._logger.info("command failed: %s", command.name)
             if not hasattr(self._video_cache_file, "on_close_commands"):
+                self._video_cache_file.on_close_commands_lock = \
+                    threading.Lock()
                 self._video_cache_file.on_close_commands = []
             self._video_cache_file.on_close_commands.append(command)
 
@@ -562,9 +565,12 @@ class VideoCache(object):
             # windowsだとopen中のファイルに対するremove/renameが失敗するからといってこれは…
             # もっとシンプルに出来ないんでしょうか
             if hasattr(self._video_cache_file, "on_close_commands"):
-                for command in self._video_cache_file.on_close_commands:
-                    self._logger.info("on close command: %s", command.name)
-                    command()
+                with self._video_cache_file.on_close_commands_lock:
+                    for command in self._video_cache_file.on_close_commands:
+                        self._logger.info("on close command: %s", command.name)
+                        command()
+
+                    self._video_cache_file.on_close_commands = []
 
         def __del__(self):
             try:
