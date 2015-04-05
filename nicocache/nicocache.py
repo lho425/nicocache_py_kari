@@ -84,20 +84,19 @@ class ConfigLoader(object):
 
     def __init__(self):
         self._config = None
-        self._config_mtime = 0#os.path.getmtime("config.py")
+        self._config_mtime = 0
 
         self._load_config()
 
     def _reload_config_if_modified(self):
-        config_mtime = os.path.getmtime("config.conf")
-        if config_mtime != self._config_mtime:
+        if self._config_mtime != os.path.getmtime("config.conf"):
             logger.info("reload config")
             self._load_config()
-            self._config_mtime = config_mtime
 
     def _load_config(self):
         self._config = RawConfigParser()
         self._config.read("config.conf")
+        self._config_mtime = os.path.getmtime("config.conf")
 
     def get_config(
             self, section, key, defaults={}):
