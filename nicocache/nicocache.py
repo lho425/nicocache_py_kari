@@ -236,24 +236,33 @@ def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
         """lowキャッシュがsaveされていた場合、非lowキャッシュも新規作成時に自動的にsaveする
         また、非lowキャッシュがcompleteしたときに、lowキャッシュがあったら消す"""
 
+        # ほとんどがautoRemoveLowの為の処理
+        # 一部autoSaveの為の処理
+
         def make_http_video_resource(
                 self, req, http_resource_getter_func, server_sockfile):
             global nicocache
 
-            low_cache = nicocache.video_cache_manager.get_video_cache(
-                video_num=self.info.video_num, low=True)
+            # 自分自身がlowキャッシュだったときは、completeした瞬間に消えてもらっては困る
 
-            if low_cache.exists():
-                if (not self.exists() and
-                    low_cache.info.subdir.startswith("save") and
-                    get_config_bool(
-                        "global", "autoSave", _default_global_config)):
-
-                    # todo!!! saveがハードコードしているので、解消する
-                    self.update_info(
-                        **low_cache.info.replace(tmp=True, low=False)._asdict())
-            else:
+            if self.info.low:
                 low_cache = None
+
+            else:
+                low_cache = nicocache.video_cache_manager.get_video_cache(
+                    video_num=self.info.video_num, low=True)
+
+                if low_cache.exists():
+                    if (not self.exists() and
+                        low_cache.info.subdir.startswith("save") and
+                        get_config_bool(
+                            "global", "autoSave", _default_global_config)):
+                        # ここはautoSaveの為の処理
+                        # todo!!! saveがハードコードしているので、解消する
+                        self.update_info(
+                            **low_cache.info.replace(tmp=True, low=False)._asdict())
+                else:
+                    low_cache = None
 
             respack = VideoCacheClass.make_http_video_resource(
                 self, req, http_resource_getter_func, server_sockfile)
