@@ -37,8 +37,20 @@ class ReqForThisServerHandler(proxtheta.utility.server.ResponseServer):
             res.body = "nicocache.py"
             res.set_content_length()
             return ResponsePack(res, server_sockfile=server_sockfile)
+
+        elif req.path == "/log.txt":
+            respack = ReqForThisServerHandler.serve_log()
+            respack.server_sockfile = server_sockfile
+            return respack
+
         else:
             return ResponsePack(httpmes.HTTP11Error((404, "Not Found")), server_sockfile=server_sockfile)
+
+    @staticmethod
+    def serve_log():
+        res = httpmes.HTTPResponse(("HTTP/1.1", 200, "OK"), body=None)
+        res.set_content_length(os.path.getsize("log.txt"))
+        return ResponsePack(res, body_file=open("log.txt", "rb"))
 
 
 class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
