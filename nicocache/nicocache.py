@@ -17,6 +17,7 @@
 from __future__ import absolute_import
 import os
 import logging as _logging
+import logging.handlers as _
 import re
 from copy import deepcopy
 import importlib
@@ -25,6 +26,7 @@ import locale
 import shutil
 import sys
 from libnicocache.base import VideoCacheInfo
+import errno
 
 
 if sys.version_info.major == 2:
@@ -477,11 +479,44 @@ def main():
     argv = sys.argv
     argc = len(argv)
     if argc > 1 and ("debug" in argv):
-        _logging.basicConfig(format="%(levelname)s:%(name)s: %(message)s")
-        _logging.root.setLevel(_logging.DEBUG)
+        logger_format = "%(levelname)s:%(name)s: %(message)s"
+        logger_level = _logging.DEBUG
+
     else:
-        _logging.basicConfig(format="%(message)s")
-        _logging.root.setLevel(_logging.INFO)
+        logger_format = "%(message)s"
+        logger_level = _logging.INFO
+
+    _logging.basicConfig(format=logger_format)
+    _logging.root.setLevel(logger_level)
+
+    try:
+        os.remove("log.old.txt")
+    except OSError as e:
+        if e.errno != errno.ENOENT:
+            raise
+
+    try:
+        os.rename("log.txt", "log.old.txt")
+    except OSError as e:
+        if e.errno != errno.ENOENT:
+            raise
+
+    try:
+        os.remove("log.txt.1")
+    except OSError as e:
+        if e.errno != errno.ENOENT:
+            raise
+
+    rotating_log_handler = _logging.handlers.RotatingFileHandler(
+        "log.txt", "w",
+        # maxBytes=1GB
+        maxBytes=1024 * 1024 * 1024, backupCount=1)
+
+    rotating_log_handler.setLevel(logger_level)
+    rotating_log_handler.setFormatter(_logging.Formatter(logger_format))
+
+    _logging.root.addHandler(rotating_log_handler)
+
     logger.info(
         "guessed system default encoding: %s", locale.getpreferredencoding())
     logger.info(u"ニコキャッシュ.py(仮)")
