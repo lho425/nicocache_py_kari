@@ -257,6 +257,27 @@ class VideoCache(object):
     # ***設計思想***
     # using cache: とかPartial download fromとかのキャッシュに関するログはすべてこのクラスのスコープで行うようにする
 
+    class _OnCloseCommands(object):
+
+        def __init__(self, logger=logger):
+
+            self._lock = threading.Lock()
+            self._commands = []
+            self._logger = logger
+
+        def append(self, command):
+            self._commands.append(command)
+
+        def execute(self):
+            with self._lock:
+                for command in self._commands:
+                    self._logger.info("on close command: %s", command.name)
+                    command()
+
+                self._commands = []
+
+    _lock_for_making_on_close_commands = threading.Lock()
+
     def __init__(self, video_cache_file, logger=logger):
         if 0:
             """type def"""
@@ -292,10 +313,11 @@ class VideoCache(object):
                 raise
 
             self._logger.info("command failed: %s", command.name)
-            if not hasattr(self._video_cache_file, "on_close_commands"):
-                self._video_cache_file.on_close_commands_lock = \
-                    threading.Lock()
-                self._video_cache_file.on_close_commands = []
+            with VideoCache._lock_for_making_on_close_commands:
+                if not hasattr(self._video_cache_file, "on_close_commands"):
+                    self._video_cache_file.on_close_commands = \
+                        self._OnCloseCommands(self._logger)
+
             self._video_cache_file.on_close_commands.append(command)
 
             return "reserved"
@@ -565,12 +587,8 @@ class VideoCache(object):
             # windowsだとopen中のファイルに対するremove/renameが失敗するからといってこれは…
             # もっとシンプルに出来ないんでしょうか
             if hasattr(self._video_cache_file, "on_close_commands"):
-                with self._video_cache_file.on_close_commands_lock:
-                    for command in self._video_cache_file.on_close_commands:
-                        self._logger.info("on close command: %s", command.name)
-                        command()
-
-                    self._video_cache_file.on_close_commands = []
+                # on_close_commandsは存在したら消えないので、時間差不整合は起きない
+                self._video_cache_file.on_close_commands.execute()
 
         def __del__(self):
             try:
