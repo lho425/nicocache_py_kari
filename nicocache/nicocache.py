@@ -57,7 +57,7 @@ logger = _logging.getLogger("nicocache.py")
 # logger.setLevel(_logging.DEBUG)
 
 
-def makeVideoCacheGuessVideoTypeMixin(VideoCacheClass):
+def applyVideoCacheGuessVideoTypeMixin(VideoCacheClass):
     class VideoCacheGuessVideoType(VideoCacheClass):
 
         def make_http_video_resource(
@@ -77,7 +77,7 @@ def makeVideoCacheGuessVideoTypeMixin(VideoCacheClass):
     return VideoCacheGuessVideoType
 
 
-def makeVideoCacheTitleMixin(VideoCacheClass):
+def applyVideoCacheTitleMixin(VideoCacheClass):
     class VideoCacheWithTitle(VideoCacheClass):
 
         def make_http_video_resource(
@@ -222,7 +222,7 @@ def get_config_bool(section, key, defaults={}):
     return _get_config("bool", section, key, defaults)
 
 
-def makeVideoCacheAutoRemoveMixin(VideoCacheClass):
+def applyVideoCacheAutoRemoveMixin(VideoCacheClass):
 
     class VideoCacheWithAutoRemoving(VideoCacheClass):
 
@@ -256,8 +256,8 @@ class Extension(object):
         self.response_server = None
 
 
-def makeVideoCacheTouchCacheMixin(VideoCacheClass):
-    class VideoCacheTouchCacheMixin(VideoCacheClass):
+def applyVideoCacheTouchCacheMixin(VideoCacheClass):
+    class VideoCacheTouchCache(VideoCacheClass):
 
         def _make_http_video_resource_with_comlete_localcache(
                 self, server_sockfile):
@@ -269,10 +269,10 @@ def makeVideoCacheTouchCacheMixin(VideoCacheClass):
                 _make_http_video_resource_with_comlete_localcache(
                     self, server_sockfile)
 
-    return VideoCacheTouchCacheMixin
+    return VideoCacheTouchCache
 
 
-def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
+def applyVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
     class VideoCacheAutoSaveAndRemove(VideoCacheClass):
 
         """lowキャッシュがsaveされていた場合、非lowキャッシュも新規作成時に自動的にsaveする
@@ -332,10 +332,10 @@ def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
     return VideoCacheAutoSaveAndRemove
 
 
-VideoCache = makeVideoCacheTouchCacheMixin(
-    makeVideoCacheGuessVideoTypeMixin(libnicocache.VideoCache))
+VideoCache = applyVideoCacheTouchCacheMixin(
+    applyVideoCacheGuessVideoTypeMixin(libnicocache.VideoCache))
 
-VideoCache = makeVideoCacheAutoSaveAndRemoveMixin(VideoCache)
+VideoCache = applyVideoCacheAutoSaveAndRemoveMixin(VideoCache)
 
 
 class NicoCache(object):
