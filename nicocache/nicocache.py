@@ -243,7 +243,6 @@ def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
             global nicocache
 
             # 自分自身がlowキャッシュだったときは、completeした瞬間に消えてもらっては困る
-
             if self.info.low:
                 low_cache = None
 
@@ -251,15 +250,21 @@ def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
                 low_cache = nicocache.video_cache_manager.get_video_cache(
                     video_num=self.info.video_num, low=True)
 
-                if low_cache.exists():
-                    if (not self.exists() and
-                        low_cache.info.subdir.startswith("save") and
-                        get_config_bool(
-                            "global", "autoSave", _default_global_config)):
-                        # ここはautoSaveの為の処理
-                        # todo!!! saveがハードコードしているので、解消する
-                        self.update_info(
-                            **low_cache.info.replace(tmp=True, low=False)._asdict())
+                # ここはautoSaveの為の処理
+                if (low_cache.exists() and not self.exists() and
+                    low_cache.info.subdir.startswith("save") and
+                    get_config_bool(
+                        "global", "autoSave", _default_global_config)):
+                    # todo!!! saveがハードコードしているので、解消する
+                    self.update_info(
+                        **low_cache.info.replace(tmp=True, low=False).
+                        _asdict())
+
+                if (low_cache.exists() and (
+                        low_cache.info.subdir.startswith("save") or
+                        low_cache.info.subdir == ".")):
+                    # 直下とsave以下にあるキャッシュ以外には変更を加えない
+                    pass
                 else:
                     low_cache = None
 
