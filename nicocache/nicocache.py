@@ -141,31 +141,76 @@ class ConfigLoader(object):
 
 _config_loader = None
 
+_default_global_config = {
+    "listenPort": 8080,
+    "proxyHost": "",
+    "proxyPort": 8080,
+    "dirCache": False,
+    "touchCache": True,
+    "cacheFolder": "",  # デフォルトは./cacheだが、それはこの項目を参照するときに""かどうかで判断する
+    "autoSave": True,
+    "autoRemoveLow": True,
+}
+
+# [S]のついているconfig項目
+# _init_config()で一度だけ初期化される
+_static_global_config = {
+    "listenPort": None,
+    "dirCache": None,
+    "cacheFolder": None,
+}
+
 
 def _init_config():
     global _config_loader
     if not os.path.exists("./config.conf"):
+        logger.info("config.conf not exists. generate config.conf.")
         shutil.copyfile(os.path.join(
             os.path.dirname(__file__), "config.conf.template"),
             "./config.conf")
 
     _config_loader = ConfigLoader()
 
+    _static_global_config["listenPort"] = _config_loader.get_config_int(
+        "global", "listenPort", _default_global_config)
+
+    _static_global_config["dirCache"] = _config_loader.get_config_bool(
+        "global", "dirCache", _default_global_config)
+
+    _static_global_config["cacheFolder"] = _config_loader.get_config(
+        "global", "cacheFolder", _default_global_config)
+
+
+def _get_config(type_string, section, key, defaults={}):
+    if section == "global":
+        defaults = _default_global_config
+
+    if section == "global" and key in _static_global_config:
+        return _static_global_config[key]
+
+    if type_string:
+        get_config_func_name = "get_config_" + type_string
+    else:
+        get_config_func_name = "get_config"
+
+    return getattr(_config_loader, get_config_func_name)(
+        section, key, defaults)
+
 
 def get_config(section, key, defaults={}):
-    return _config_loader.get_config(section, key, defaults)
+    return _get_config(None, section, key, defaults)
 
 
 def get_config_int(section, key, defaults={}):
-    return _config_loader.get_config_int(section, key, defaults)
+    return _get_config("int", section, key, defaults)
 
 
 def get_config_float(section, key, defaults={}):
-    return _config_loader.get_config_float(section, key, defaults)
+    return _get_config("float", section, key, defaults)
 
 
 def get_config_bool(section, key, defaults={}):
-    return _config_loader.get_config_bool(section, key, defaults)
+    return _get_config("bool", section, key, defaults)
 
 
 def makeVideoCacheAutoRemoveMixin(VideoCacheClass):
@@ -201,24 +246,13 @@ class Extension(object):
 
         self.response_server = None
 
-_default_global_config = {
-    "listenPort": 8080,
-    "proxyHost": "",
-    "proxyPort": 8080,
-    "dirCache": False,
-    "touchCache": True,
-    "cacheFolder": "",  # デフォルトは./cacheだが、それはこの項目を参照するときに""かどうかで判断する
-    "autoSave": True,
-    "autoRemoveLow": True,
-}
-
 
 def makeVideoCacheTouchCacheMixin(VideoCacheClass):
     class VideoCacheTouchCacheMixin(VideoCacheClass):
 
         def _make_http_video_resource_with_comlete_localcache(
                 self, server_sockfile):
-            if get_config_bool("global", "touchCache", _default_global_config):
+            if get_config_bool("global", "touchCache"):
                 logger.debug("touch %s", self.info.make_cache_file_path())
                 self._video_cache_file.touch()
 
@@ -254,7 +288,7 @@ def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
                 if (low_cache.exists() and not self.exists() and
                     low_cache.info.subdir.startswith("save") and
                     get_config_bool(
-                        "global", "autoSave", _default_global_config)):
+                        "global", "autoSave")):
                     # todo!!! saveがハードコードしているので、解消する
                     self.update_info(
                         **low_cache.info.replace(tmp=True, low=False).
@@ -283,7 +317,7 @@ def makeVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
 
                 if (self._left_size == 0 and self._low_cache is not None and
                     get_config_bool(
-                        "global", "autoRemoveLow", _default_global_config)):
+                        "global", "autoRemoveLow")):
                     self._low_cache.remove()
 
     return VideoCacheAutoSaveAndRemove
@@ -319,11 +353,11 @@ class NicoCache(object):
         後者の場合、GET http://host:8080/ ...はGET / ...となるが、前者だと変更されない
         どちらの場合もhop by hop ヘッダは削除される"""
         secondary_proxy_host = get_config(
-            "global", "proxyHost", _default_global_config)
+            "global", "proxyHost")
         if secondary_proxy_host:
             secondary_proxy_addr = core.common.Address(
                 (secondary_proxy_host, get_config_int(
-                    "global", "proxyPort", _default_global_config)))
+                    "global", "proxyPort")))
         else:
             secondary_proxy_addr = None
         del secondary_proxy_host
@@ -595,13 +629,13 @@ def main():
 
     _init_config()
 
-    port = get_config_int("global", "listenPort", _default_global_config)
+    port = get_config_int("global", "listenPort")
     complete_cache = False
 
     nonproxy_camouflage = True
 
     cache_dir_path = get_config(
-        "global", "cacheFolder", _default_global_config) or "./cache"
+        "global", "cacheFolder") or "./cache"
 
     if not os.path.isdir(cache_dir_path):
         os.makedirs(cache_dir_path)
@@ -613,7 +647,7 @@ def main():
     logger.info("initializing")
 
     # ファクトリやらシングルトンやらの初期化
-    if get_config_bool("global", "dirCache", _default_global_config):
+    if get_config_bool("global", "dirCache"):
         filesystem_wrapper = libnicocache.pathutil.DirCachingFileSystemWrapper(
             cache_dir_path)
     else:
