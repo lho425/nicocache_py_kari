@@ -16,6 +16,19 @@ listenPort = 8080
 # デフォルト値: 8080
 #proxyPort = 8080
 
+# 接続元の限定
+# nicocache.pyに接続できるPCを限定します
+# デフォルト値: local
+#	local	自PC
+#	all		全IP
+#	lanA	プライベートIP (10.xxx.xxx.xxx）
+#	lanB	プライベートIP（172.16.xxx.xxx 〜 172.31.xxx.xxx）
+#	lanC	プライベートIP（192.168.xxx.xxx） ←普通これ
+#	lan		lanCと同じ
+#allowFrom=local
+
+
+
 # cacheフォルダ以下にあるファイルの一覧をキャッシュするか(true/false) [S]
 # 大量のキャッシュがある場合や、ネットワーク上のフォルダ等の遅い場所にある場合は高速化が期待できる
 # デフォルト値:false

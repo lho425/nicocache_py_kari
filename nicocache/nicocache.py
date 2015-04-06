@@ -157,6 +157,8 @@ _default_global_config = {
     "cacheFolder": "",  # デフォルトは./cacheだが、それはこの項目を参照するときに""かどうかで判断する
     "autoSave": True,
     "autoRemoveLow": True,
+
+    "allowFrom": "local",
 }
 
 # [S]のついているconfig項目
@@ -460,6 +462,53 @@ class CONNECT_Handler(proxtheta.utility.server.ResponseServer):
         return ResponsePack(httpmes.HTTP11Error((501, "Not Implemented")),
                             server_sockfile=server_sockfile)
 
+_http_403forbidden_res = httpmes.HTTPResponse(("HTTP/1.1", 403, "Forbidden"),
+                                              body="403 Forbidden")
+_http_403forbidden_res.set_content_length()
+
+
+class ForbiddenClientHandler(proxtheta.utility.server.ResponseServer):
+
+    @staticmethod
+    def accept(req, info):
+        """弾く時はTrueを返す
+        Trueを返すと403を返すserve()が呼ばれるので注意"""
+
+        return not ForbiddenClientHandler.allow(req, info)
+
+    @staticmethod
+    def allow(req, info):
+        allow_from = get_config("global", "allowFrom")
+
+        if info.client_address.host.startswith("127."):
+            # 127.*.*.*からは常に許可
+            return True
+
+        elif allow_from == "all":
+            return True
+
+        elif allow_from == "lanA":
+            # 末尾の"."まで含めないと100.*.*.*とかもひっかかるので注意
+            if info.client_address.host.startswith("10."):
+                return True
+
+        elif allow_from == "lanB":
+            if info.client_address.host.startswith("172."):
+                client = info.client_address.host
+
+                return (16 <= int(client.split(".")[1]) <= 31)
+
+        elif allow_from == "lanC" or allow_from == "lan":
+            if info.client_address.host.startswith("192.168."):
+                return True
+
+        return False  # not allow
+
+    @staticmethod
+    def serve(req, server_sockfile, info):
+        logger.info("Forbidden client: %s", info.client_address.host)
+        return ResponsePack(_http_403forbidden_res, server_sockfile)
+
 
 def load_extensions():
     extensions = []
@@ -584,6 +633,8 @@ def main():
     request_filters = []
     response_servers = []
     response_filters = []
+
+    response_servers.append(ForbiddenClientHandler())
 
     for extension in extensions:
         if extension.request_filter:
