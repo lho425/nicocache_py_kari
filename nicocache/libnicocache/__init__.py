@@ -15,6 +15,7 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
+from proxtheta.core.iowrapper import FileWrapper
 
 """ニコ動の動画キャッシュプロクシサーバを実装する上で、ファイルシステム上のキャッシュを管理するため道具をまとめたライブラリ"""
 
@@ -38,7 +39,7 @@ import proxtheta.utility.client
 import proxtheta.utility.server
 
 from proxtheta import utility, core
-from proxtheta.core import httpmes
+from proxtheta.core import httpmes, iowrapper
 from proxtheta.core.common import ResponsePack
 from proxtheta.utility.common import safe_close
 from proxtheta.utility.proxy import convert_upstream_error
@@ -409,7 +410,7 @@ class VideoCache(object):
         if mimetype:
             res.headers["Content-Type"] = mimetype
         respack = ResponsePack(
-            res, body_file=self._video_cache_file.open(readonly=True),
+            res, body_file=self._CompleteCacheReader(self._video_cache_file),
             server_sockfile=server_sockfile)
         return respack
 
@@ -598,6 +599,20 @@ class VideoCache(object):
                     CachingReader.__del__(self)
             except Exception:
                 pass
+
+    class _CompleteCacheReader(iowrapper.FileWrapper):
+
+        def __init__(self, video_cache_file):
+            self._video_cache_file = video_cache_file
+            FileWrapper.__init__(
+                self, video_cache_file.open(readonly=True), close=True)
+
+        def close(self):
+            iowrapper.FileWrapper.close(self)
+
+            if hasattr(self._video_cache_file, "on_close_commands"):
+                # on_close_commandsは存在したら消えないので、時間差不整合は起きない
+                self._video_cache_file.on_close_commands.execute()
 
 
 class VideoCacheManager:
