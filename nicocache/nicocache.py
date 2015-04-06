@@ -58,11 +58,14 @@ def makeVideoCacheGuessVideoTypeMixin(VideoCacheClass):
 
         def make_http_video_resource(
                 self, req, http_resource_getter_func, server_sockfile):
-            video_type, _, _ = libnicocache.\
-                get_videotype_videonum_islow__with_req(
-                    req, None)
 
-            self.update_info(video_type=video_type)
+            if not self.exists():
+
+                video_type, _, _ = libnicocache.\
+                    get_videotype_videonum_islow__with_req(
+                        req, None)
+
+                self.update_info(video_type=video_type)
 
             return VideoCacheClass.make_http_video_resource(
                 self, req, http_resource_getter_func, server_sockfile)
