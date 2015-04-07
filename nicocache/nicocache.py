@@ -283,14 +283,13 @@ def applyVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
 
         def make_http_video_resource(
                 self, req, http_resource_getter_func, server_sockfile):
-            global nicocache
 
             # 自分自身がlowキャッシュだったときは、completeした瞬間に消えてもらっては困る
             if self.info.low:
                 low_cache = None
 
             else:
-                low_cache = nicocache.video_cache_manager.get_video_cache(
+                low_cache = get_video_cache_manager().get_video_cache(
                     video_num=self.info.video_num, low=True)
 
                 # ここはautoSaveの為の処理
@@ -445,7 +444,11 @@ class NicoCache(object):
             # ニコニコ動画の動画ファイルへのアクセスでないとき
             return ResponsePack(None, server_sockfile=server_sockfile)
 
-nicocache = NicoCache()
+_nicocache = NicoCache()
+
+
+def get_video_cache_manager():
+    return _nicocache.video_cache_manager
 
 
 class CONNECT_Handler(proxtheta.utility.server.ResponseServer):
@@ -625,9 +628,9 @@ def main():
 
     video_info_rewriter = rewriter.Rewriter(video_cache_manager)
 
-    nicocache.video_cache_manager = video_cache_manager
-    nicocache.nonproxy_camouflage = nonproxy_camouflage
-    nicocache.complete_cache = complete_cache
+    _nicocache.video_cache_manager = video_cache_manager
+    _nicocache.nonproxy_camouflage = nonproxy_camouflage
+    _nicocache.complete_cache = complete_cache
 
     thumbinfo_server = libnicovideo.thumbinfo.CashngThumbInfoServer()
 
@@ -637,8 +640,8 @@ def main():
                                 NicoCacheAPIHandler(
                                     video_cache_manager, thumbinfo_server),
                                 LocalURIHandler(),
-                                nicocache.handle_video_request,
-                                nicocache.simple_proxy_response_server]
+                                _nicocache.handle_video_request,
+                                _nicocache.simple_proxy_response_server]
     default_response_filters = [video_info_rewriter]
 
     logger.info("finish initializing")
