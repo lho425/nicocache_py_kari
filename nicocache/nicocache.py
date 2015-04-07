@@ -582,6 +582,8 @@ def main():
         # maxBytes=1GB
         maxBytes=1024 * 1024 * 1024, backupCount=1)
 
+    _logging.captureWarnings(True)
+
     rotating_log_handler.setLevel(logger_level)
     rotating_log_handler.setFormatter(_logging.Formatter(logger_format))
 
