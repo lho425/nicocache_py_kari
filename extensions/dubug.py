@@ -18,10 +18,14 @@ import proxtheta.utility.client
 #
 #     @staticmethod
 #     def accept(res, req, info):
-# デバッグ用
+#         # デバッグ用
 #
 #         return False
 #
 #
-# extension = Extension(name)
-# extension.response_filters = [ResFilter()]
+# def get_extension():
+#
+#     extension = Extension(name)
+#     extension.response_filter = ResFilter()
+#
+#     return extension

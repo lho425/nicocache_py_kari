@@ -235,7 +235,9 @@ class NicoMonkeyResFilter(proxy.ResponseFilter):
         return res
 
 
-extension = nicocache.Extension()
+def get_extension():
 
+    extension = nicocache.Extension("nicomonkey")
+    extension.response_filter = NicoMonkeyResFilter("nicomonkey")
 
-extension.response_filter = NicoMonkeyResFilter("nicomonkey")
+    return extension

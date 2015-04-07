@@ -510,16 +510,34 @@ class ForbiddenClientHandler(proxtheta.utility.server.ResponseServer):
         return ResponsePack(_http_403forbidden_res, server_sockfile)
 
 
-def load_extensions():
-    extensions = []
+def load_extension_modules():
+    extension_modules = []
     importer = pkgutil.get_importer("extensions")
     for i in importer.iter_modules():
         modname = i[0]
         mod = importlib.import_module("." + modname, "extensions")
-        if hasattr(mod, "extension"):
-            mod.extension.name = mod.extension.name or modname
-            extensions.append(mod.extension)
+        is_package = i[1]
+        if not is_package and mod.__file__.endswith(".pyc"):
+            # パッケージのときは.pycしかなくてもよい
+            if not os.path.exists(mod.__file__[:-1]):
+                # extensions/mod.pyが存在しないとき
+                # つまりpycしかないとき
+                # extension登録をスキップ
+                continue
 
+        extension_modules.append(mod)
+
+    return extension_modules
+
+
+def load_extensions(extension_modules):
+    extensions = []
+    for mod in extension_modules:
+        if hasattr(mod, "get_extension"):
+            extension = mod.get_extension()
+            extension.name = extension.name or mod.__name__
+            extensions.append(extension)
+            logger.info("loaded extension: %s", extension.name)
     return extensions
 
 
@@ -570,6 +588,8 @@ def main():
         "guessed system default encoding: %s", locale.getpreferredencoding())
     logger.info(u"ニコキャッシュ.py(仮)")
 
+    logger.info("initializing")
+
     _init_config()
 
     port = get_config_int("global", "listenPort")
@@ -587,7 +607,7 @@ def main():
     if not os.path.isdir(save_dir_path):
         os.makedirs(save_dir_path)
 
-    logger.info("initializing")
+    extension_modules = load_extension_modules()
 
     # ファクトリやらシングルトンやらの初期化
     if get_config_bool("global", "dirCache"):
@@ -625,10 +645,7 @@ def main():
 
     # エクステンションの取り込み
     logger.info("load extensions")
-    extensions = load_extensions()
-
-    for extension in extensions:
-        logger.info("loaded extension: %s", extension.name)
+    extensions = load_extensions(extension_modules)
 
     request_filters = []
     response_servers = []

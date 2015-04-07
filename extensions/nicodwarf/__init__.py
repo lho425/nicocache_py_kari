@@ -20,6 +20,9 @@ class VideoRequestSaver(proxy.RequestFilter):
         return False
 
 
-extension = Extension()
+def get_extension():
 
-extension.request_filter = VideoRequestSaver()
+    extension = Extension(u"nicodwarf(作りかけのfetcher相当の機能)")
+
+    extension.request_filter = VideoRequestSaver()
+    return extension

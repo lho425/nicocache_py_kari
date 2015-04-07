@@ -73,5 +73,10 @@ class KCSResponseFilter(proxy.ResponseFilter):
 
         return proxy.ResponseFilter.filtering(res, req, info)
 
-extension = Extension("艦これ盗聴器")
-extension.response_filters_extend = [KCSResponseFilter()]
+
+def get_extension():
+
+    extension = Extension("艦これ盗聴器")
+    extension.response_filter = KCSResponseFilter()
+
+    return extension
