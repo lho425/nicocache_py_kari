@@ -1,14 +1,36 @@
 # -*- coding: utf-8 -
 import os
 import logging as _logging
+import locale
 
 logger = _logging.getLogger(__name__)
+
+
+def _convert_unicode(string):
+    if isinstance(string, unicode):
+        return string
+    else:
+        return string.decode(locale.getpreferredencoding())
+
+
+def make_unicode_walk(walk):
+    def unicode_walk(top, topdown=True, onerror=None, followlinks=False):
+        for (dirpath, dirnames, filenames) in walk(
+                top, topdown, onerror, followlinks):
+
+            dirpath = _convert_unicode(dirpath)
+            dirnames = [_convert_unicode(dirname) for dirname in dirnames]
+            filenames = [_convert_unicode(filename) for filename in filenames]
+
+            yield (dirpath, dirnames, filenames)
+
+    return unicode_walk
 
 
 class FileSystemWrapper(object):
 
     def __init__(self, walk=os.walk):
-        self._walk = walk
+        self._walk = make_unicode_walk(walk)
 
     def walk(self, top, topdown=True, onerror=None, followlinks=False):
         return self._walk(top, topdown, onerror, followlinks)
@@ -34,7 +56,7 @@ class DirCahingWalker:
     def __init__(self, top, topdown=True, onerror=None, followlinks=False):
         self._top_dir = os.path.normpath(top)
 
-        self._real_walk = os.walk
+        self._real_walk = make_unicode_walk(os.walk)
         self._topdown = topdown
         self._onerror = onerror
         self._followlinks = followlinks
@@ -108,6 +130,9 @@ class DirCahingWalker:
         return self._pathlist
 
     def rename_file(self, oldpath, newpath):
+        logger.debug("old path of rename file: %s", oldpath)
+        logger.debug("new path of rename file: %s", newpath)
+
         # todo!!!排他処理
         oldpath_dirname = os.path.normpath(os.path.dirname(oldpath))
         oldpath_basename = os.path.basename(oldpath)
@@ -119,6 +144,7 @@ class DirCahingWalker:
         # dirpath == newpath_dirname となったときにfilenamesにnewpath_basenameを加える
         for (dirpath, dirnames, filenames) in self._pathlist:
             # todo!!! 遅くなるようなら、self._pathlistにあるpathは常に正規化されているようにする
+            logger.debug("compare directory path: %s", dirpath)
             if oldpath_dirname == os.path.normpath(dirpath):
                 filenames.remove(oldpath_basename)
                 self._dir_mtime[oldpath_dirname] = self._getmtime(
@@ -135,12 +161,16 @@ class DirCahingWalker:
             # listを作りなおしてself._pathlistに代入する必要はない
 
     def remove_file(self, path):
+        logger.debug("path of remove file: %s", path)
+
         # todo!!!排他処理
         path_dirname = os.path.normpath(os.path.dirname(path))
         path_basename = os.path.basename(path)
 
         for (dirpath, dirnames, filenames) in self._pathlist:
             # todo!!! 遅くなるようなら、self._pathlistにあるpathは常に正規化されているようにする
+
+            logger.debug("compare directory path: %s", dirpath)
             if path_dirname == os.path.normpath(dirpath):
                 filenames.remove(path_basename)
                 self._dir_mtime[path_dirname] = self._getmtime(path_dirname)
