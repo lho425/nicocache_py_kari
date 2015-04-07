@@ -85,7 +85,14 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
         res_body = "NicoCacheAPI command results: \n" + ''.join(logs)
 
         logger.info(res_body)
-        res.body = res_body.encode("utf-8")
+
+        # !!! あまりよろしくない
+        # VideoCacheInfoをunicode化したほうがよいかと
+        if isinstance(res_body, unicode):
+            res.body = res_body.encode("utf-8")
+        else:
+            res.body = res_body
+
         res.set_content_length()
 
         return ResponsePack(res, server_sockfile=server_sockfile)
