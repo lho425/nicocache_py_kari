@@ -576,6 +576,13 @@ class VideoCache(object):
 
             CachingReader.close(self)
 
+            # oh my god!
+            # windowsだとopen中のファイルに対するremove/renameが失敗するからといってこれは…
+            # もっとシンプルに出来ないんでしょうか
+            if hasattr(self._video_cache_file, "on_close_commands"):
+                # on_close_commandsは存在したら消えないので、時間差不整合は起きない
+                self._video_cache_file.on_close_commands.execute()
+
             if self._left_size == 0:
                 # close()するまでハードディスクにかきこまれてないかもしれないので
                 # read()内でself._left_size == 0をチェックするのではなく、ここでチェックしてログを残す
@@ -583,13 +590,6 @@ class VideoCache(object):
                 self._logger.info("cache completed: " + self.videofilename)
             else:
                 self._logger.info("suspended: " + self.videofilename)
-
-            # oh my god!
-            # windowsだとopen中のファイルに対するremove/renameが失敗するからといってこれは…
-            # もっとシンプルに出来ないんでしょうか
-            if hasattr(self._video_cache_file, "on_close_commands"):
-                # on_close_commandsは存在したら消えないので、時間差不整合は起きない
-                self._video_cache_file.on_close_commands.execute()
 
         def __del__(self):
             try:
