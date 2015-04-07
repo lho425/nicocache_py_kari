@@ -6,7 +6,6 @@ import socket
 # 原則close()を呼んだらラップしているfile object もcloseする
 # 別のラッパーをラップしてる場合、別のラッパーも上の挙動をするようにする
 # しかし、close()を呼んでもfile objectをclose()したくない時はFileWrapperの__init_でclose=falseを渡す
-import sys
 import common
 
 
@@ -74,9 +73,9 @@ class FileWrapper(object):
     def __del__(self):
         if not self._closed:
             try:
-                sys.stderr.write(
-                    "FileWrapper was closed by GC! Resource leaking!\n")
-                sys.stderr.write(object.__repr__(self) + "\n")
+                self.logger.error(
+                    "FileWrapper was closed by GC! Resource leaking!")
+                self.logger.error(object.__repr__(self))
             except:
                 pass
 
@@ -123,10 +122,10 @@ class SocketWrapper(FileWrapper):
     def __del__(self):
         if not self._closed:
             try:
-                sys.stderr.write(
-                    "SocketWrapper was closed by GC! Resource leaking!\n")
-                sys.stderr.write(
-                    self.__class__.__name__ + ", " + str(self.address) + "\n")
+                self.logger.error(
+                    "SocketWrapper was closed by GC! Resource leaking!")
+                self.logger.error(
+                    self.__class__.__name__ + ", " + str(self.address))
             except:
                 pass
 
