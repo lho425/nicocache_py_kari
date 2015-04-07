@@ -355,6 +355,8 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
 
         self.assertEqual(data, "a" * 100 + "b" * 200)
 
+        respack.close()
+
     def test_create_response_with_new_localcache(self):
         host = "smile-com42.nicovideo.jp"
         req = httpmes.HTTPRequest(
