@@ -326,19 +326,22 @@ class VideoCache(object):
         return "success"
 
     def update_info(self, **kwargs):
-        new_video_cache_info = self.info.replace(**kwargs)
-        if self.info == new_video_cache_info:
-            return "success"
 
         def command():
-            if not self.exists():
-                internal = "(internal)"
-            else:
-                internal = ""
+            new_video_cache_info = self.info.replace(**kwargs)
+
             self._video_cache_file.update_cache_info(new_video_cache_info)
-            self._logger.info(
-                "rename cache%s: %s", internal,
-                self._video_cache_file.info.make_cache_file_path())
+
+            if not self.exists():
+                # 内部的な処理のみのときはdebugログにする
+                self._logger.debug(
+                    "rename cache(internal): %s",
+                    self._video_cache_file.info.make_cache_file_path())
+            else:
+                self._logger.info(
+                    "rename cache: %s",
+                    self._video_cache_file.info.make_cache_file_path())
+
         command.name = ("rename " +
                         self._video_cache_file.info.make_cache_file_path())
 
