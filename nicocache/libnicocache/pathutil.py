@@ -6,21 +6,22 @@ import locale
 logger = _logging.getLogger(__name__)
 
 
-def _convert_unicode(string):
+def _convert_unicode(string, encoding):
     if isinstance(string, unicode):
         return string
     else:
-        return string.decode(locale.getpreferredencoding())
+        return string.decode(encoding)
 
 
 def make_unicode_walk(walk):
+    preferredencoding = locale.getpreferredencoding()
     def unicode_walk(top, topdown=True, onerror=None, followlinks=False):
         for (dirpath, dirnames, filenames) in walk(
                 top, topdown, onerror, followlinks):
 
-            dirpath = _convert_unicode(dirpath)
-            dirnames = [_convert_unicode(dirname) for dirname in dirnames]
-            filenames = [_convert_unicode(filename) for filename in filenames]
+            dirpath = _convert_unicode(dirpath, preferredencoding)
+            dirnames = [_convert_unicode(dirname, preferredencoding) for dirname in dirnames]
+            filenames = [_convert_unicode(filename, preferredencoding) for filename in filenames]
 
             yield (dirpath, dirnames, filenames)
 
