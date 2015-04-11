@@ -428,7 +428,9 @@ class TestVideoCacheManager(NicoCacheTestCase):
         video_cache_list = self.video_cache_manager.get_video_cache_list(
             video_cache_info)
 
-        self.assertEqual(len(video_cache_list), 2)
+        # ある(video_num, low)に対するキャッシュファイルは1つしかないないように振る舞うので
+        # 個数は1となる
+        self.assertEqual(len(video_cache_list), 1)
 
         for video_cache in video_cache_list:
             self.assertEqual(video_cache.info.video_id, "so20")
