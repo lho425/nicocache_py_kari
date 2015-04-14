@@ -1,3 +1,4 @@
 import nicocache
 
-nicocache.main()
+if __name__ == "__main__":
+    nicocache.main()
