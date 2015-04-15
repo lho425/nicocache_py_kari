@@ -63,11 +63,7 @@ def transfer_resbody_to_client(res, body_file, client_file, req=None):
     return
 
 
-def is_localhost(astr):  # todo!!! handle ipv6 localhost "::1"
-    try:
-        addr_str = socket.gethostbyname(astr)
-    except socket.gaierror:
-        return False
+def is_localhost(addr_str):  # todo!!! handle ipv6 localhost "::1"
 
     return addr_str.startswith("127")
 
