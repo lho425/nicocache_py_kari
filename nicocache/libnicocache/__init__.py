@@ -694,6 +694,7 @@ class VideoCacheManager:
                     # キャッシュ以外のファイルがあると例外を投げられてしまう
                     continue
 
+                self._logger.debug("cache file found: %s", a_video_cache_info)
                 video_cache_file_list.append(
                     self._video_cache_file_manager.get(a_video_cache_info))
 
