@@ -734,6 +734,20 @@ class VideoCacheManager:
         self._update_video_cache_file_table()
 
         video_cache_id = (video_num, low)
+
+        # 実際に存在していないキャッシュならばテーブルから消す
+        # それをしないと、例えば、cache/sub/にあるキャッシュを消して、
+        # もう一度新規作成するときに、get_video_cacheが古いcachefileを返し、
+        # cache/sub/に新規作成されてしまう
+
+        # また、存在していないキャッシュをupdate_infoでcache/sub/に移動した場合、
+        # get_video_cacheがcache/sub/にある事になっている(まだ実際には存在していない)キャッシュを返してしまう
+
+        if (video_cache_id in self._video_cache_file_table and
+                not self._video_cache_file_table[video_cache_id].exists()):
+
+            del self._video_cache_file_table[video_cache_id]
+
         if video_cache_id not in self._video_cache_file_table:
             video_cache_info = VideoCacheInfo.create(
                 rootdir=self._rootdir, video_type="sm",
