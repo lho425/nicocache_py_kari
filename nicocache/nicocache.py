@@ -518,16 +518,15 @@ def load_extension_modules():
     importer = pkgutil.get_importer("extensions")
     for i in importer.iter_modules():
         modname = i[0]
-        mod = importlib.import_module("." + modname, "extensions")
-        is_package = i[1]
-        if not is_package and mod.__file__.endswith(".pyc"):
-            # パッケージのときは.pycしかなくてもよい
-            if not os.path.exists(mod.__file__[:-1]):
+
+        if (os.path.exists("extensions/" + modname + ".pyc") and
+                not os.path.exists("extensions/" + modname + ".py")):
                 # extensions/mod.pyが存在しないとき
                 # つまりpycしかないとき
-                # extension登録をスキップ
-                continue
+                # extensionのロードをスキップ
+            continue
 
+        mod = importlib.import_module("." + modname, "extensions")
         extension_modules.append(mod)
 
     return extension_modules
