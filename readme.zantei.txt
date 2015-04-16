@@ -22,8 +22,11 @@ windowsでは、キャッシュフォルダ、またはサブフォルダにシ�
 
 ## (cygwinでなくて)windowsでchromeを使っていると、スリーブからの復帰時に暫く通信が固まってしまう。
 
-対処法: 同梱しているproxy_sample.pacのnicocache_portを書き換えた上で、proxy_sample.pacを使うようにwindowsを設定する。
+対処法1: 同梱しているproxy_sample.pacのnicocache_portを書き換えた上で、proxy_sample.pacを使うようにwindowsを設定する。
 (git 使ってる人はproxy_sample.pacをproxy.pacにコピーしてから書き換えたほうが良いでしょう。)
+
+対処法2: 同梱しているextensions/disable/procpool_getaddrinfo.pyをextensions直下に移す。
+procpool_getaddrinfoエクステンションにより、固まってしまう部分をマルチプロセスで並列に処理します。
 
 なぜか、windows版のpythonだと、hostの名前解決の関数が、他のスレッドをブロックしてしまうのが原因。
 
