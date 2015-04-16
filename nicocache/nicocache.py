@@ -152,7 +152,6 @@ _default_global_config = {
     "listenPort": 8080,
     "proxyHost": "",
     "proxyPort": 8080,
-    "dirCache": False,
     "touchCache": True,
     "cacheFolder": "",  # デフォルトは./cacheだが、それはこの項目を参照するときに""かどうかで判断する
     "autoSave": True,
@@ -165,7 +164,6 @@ _default_global_config = {
 # _init_config()で一度だけ初期化される
 _static_global_config = {
     "listenPort": None,
-    "dirCache": None,
     "cacheFolder": None,
 }
 
@@ -182,9 +180,6 @@ def _init_config():
 
     _static_global_config["listenPort"] = _config_loader.get_config_int(
         "global", "listenPort", _default_global_config)
-
-    _static_global_config["dirCache"] = _config_loader.get_config_bool(
-        "global", "dirCache", _default_global_config)
 
     _static_global_config["cacheFolder"] = _config_loader.get_config(
         "global", "cacheFolder", _default_global_config)
