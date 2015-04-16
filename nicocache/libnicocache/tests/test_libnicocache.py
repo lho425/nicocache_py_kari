@@ -328,7 +328,6 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
         proxtheta.utility.client.create_sockfile = create_sockfile
 
         self.video_cache_manager = VideoCacheManager(
-            video_cache_file_manager, filesystem_wrapper,
             self.testdir_path, VideoCache, logger_for_test)
 
 #         self._original_getthumbinfo = nicocache.getthumbinfo
@@ -419,7 +418,6 @@ class TestVideoCacheManager(NicoCacheTestCase):
             filesystem_wrapper, VideoCacheFile)
 
         self.video_cache_manager = VideoCacheManager(
-            video_cache_file_manager, filesystem_wrapper,
             self.testdir_path, VideoCache, logger_for_test)
 
     def test__get_video_cache_list(self):

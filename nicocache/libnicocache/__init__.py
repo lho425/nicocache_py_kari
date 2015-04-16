@@ -16,6 +16,8 @@
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 from proxtheta.core.iowrapper import FileWrapper
+from . import pathutil
+
 
 """ニコ動の動画キャッシュプロクシサーバを実装する上で、ファイルシステム上のキャッシュを管理するため道具をまとめたライブラリ"""
 
@@ -633,8 +635,10 @@ class VideoCacheManager:
         return VideoCacheFile
 
     def __init__(
-            self, video_cache_file_manager, filesystem_wrapper, rootdir,
+            self, rootdir,
             VideoCacheClass=VideoCache, logger=logger):
+
+        filesystem_wrapper = pathutil.FileSystemWrapper()
 
         # 再代入してはいけない
         self._dir_mtime = {}
