@@ -140,7 +140,8 @@ class VideoCacheInfo(_VideoCacheInfo):
         if title is not None:
             kwargs["title"] = title.replace("/", _get_slash_alternative(title))
 
-        return self._replace(**kwargs)
+        # 複雑だけど、__new__()を経由させないとpathが正規化されない
+        return self.__class__(**self._replace(**kwargs)._asdict())
 
     def update(self, new_video_cache_info):
         new_info_asdict = new_video_cache_info._asdict()
