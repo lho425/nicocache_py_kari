@@ -16,6 +16,8 @@
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 from proxtheta.core.iowrapper import FileWrapper
+from . import pathutil
+
 
 """ニコ動の動画キャッシュプロクシサーバを実装する上で、ファイルシステム上のキャッシュを管理するため道具をまとめたライブラリ"""
 
@@ -194,19 +196,6 @@ class VideoCacheFileManager(object):
         return self._get_cachefile_from_weak_dick(video_cache)
 
 
-#     !!! あとで何処かへ移動されるはずのコード
-#     def lazy_create(self, video_cache_info):
-#         video_cache = self._VideoCacheFileClass(
-#             self._filesystem_wrapper, video_cache_info)
-#
-#         return self._get_cachefile_from_weak_dick(video_cache)
-#
-#     def create(self, video_cache_info):
-#         video_cache = self.lazy_create(video_cache_info)
-#         video_cache.create()
-#         return video_cache
-
-
 def get_partial_http_resource(
         req, get_http_resource_func, server_sockfile,
         first_byte_pos, last_byte_pos=None,):
@@ -240,20 +229,6 @@ def get_partial_http_resource(
 
 
 class VideoCache(object):
-    #     !!! あとでVideoCacheManagerに移るべき部分
-    #     """与えられた情報から得られる複数のキャッシュ候補から、
-    #     実装されたロジックを基に適切なキャッシュを絞り込んだ上でCRUDを行う.
-    #     このクラスを経由すると、クライアントが一つのvideo_numを与えると、
-    #     VideoCacheOperatorが、なんかいい感じに、矛盾することなく
-    #     ファイルシステム上のキャッシュファイルを操作してくれる.
-    #
-    #     しかし、このクラスは、一つのvideo_numに対し、複数のファイルがあることを隠蔽しない.
-    #
-    #     新しいキャッシュファイルをどこにどういう名前で作るか
-    #     既に存在するキャッシュをどういう順番で探索し、どのキャッシュファイルを使うか
-    #     等の挙動を決定する
-    #
-    #     NicoCacheの挙動を左右する重要なクラス"""
 
     # ***設計思想***
     # using cache: とかPartial download fromとかのキャッシュに関するログはすべてこのクラスのスコープで行うようにする
@@ -280,23 +255,10 @@ class VideoCache(object):
     _lock_for_making_on_close_commands = threading.Lock()
 
     def __init__(self, video_cache_file, logger=logger):
-        if 0:
-            """type def"""
-            self._video_cache_file = VideoCacheFileManager()
 
         self._video_cache_file = video_cache_file
 
         self._logger = logger
-
-#     def rename_cache(
-#             self, video_num, new_video_cache_info, low=None, rootdir=None):
-#         video_cache = self._get_video_cache(video_num, low, rootdir)
-#         if video_cache is None:
-#             raise libnicocache.NoSuchCacheError("video_num: %s" % video_num)
-#
-#         video_cache.update_cache_info(new_video_cache_info)
-#
-#         return video_cache.info
 
     @property
     def info(self):
@@ -372,34 +334,6 @@ class VideoCache(object):
 
     def is_complete(self):
         return not self.info.tmp
-
-
-#     !!! あとでVideoCacheManagerに移るべき部分
-
-#
-#     def _create_video_cache(
-#             self, video_num, low, default_video_type="sm", rootdir=None):
-#         """rootdir=Noneなら適当に決める"""
-#         rootdir = rootdir or self._rootdir
-#         video_cache_info = VideoCacheInfo.create(
-#             rootdir=self._rootdir, video_type=default_video_type,
-#             video_num=video_num, low=low, tmp=True)
-#
-#         return self._video_cache_manager.create(video_cache_info)
-#
-#     def get_video_cache_info_list(self, video_num, rootdir=None):
-#         video_cache_list = self._get_video_cache_list(video_num, rootdir)
-#
-#         video_cache_info_list = [
-#             video_cache.info for video_cache in video_cache_list]
-#         return video_cache_info_list
-#
-#     def get_video_cache_info(self, video_num, low, rootdir=None):
-#         video_cache = self._get_video_cache(video_num, low, rootdir)
-#         if video_cache is None:
-#             return None
-#
-#         return video_cache.info
 
     def _make_http_video_resource_with_comlete_localcache(
             self, server_sockfile):
@@ -620,79 +554,140 @@ class VideoCache(object):
 
 class VideoCacheManager:
 
+    """与えられた情報から得られる複数のキャッシュ候補から、
+        実装されたロジックを基に適切なキャッシュを絞り込んだ上でCRUDを行う.
+        このクラスを経由すると、クライアントが一つのvideo_numを与えると、
+        VideoCacheManagerが、なんかいい感じに、矛盾することなく
+        ファイルシステム上のキャッシュファイルを操作してくれる.
+
+        新しいキャッシュファイルをどこにどういう名前で作るか
+        既に存在するキャッシュをどういう順番で探索し、どのキャッシュファイルを使うか
+        等の挙動を決定する
+
+        NicoCacheの挙動を左右する重要なクラス
+
+        現段階でこのクラスは、一つの(video_num, low)に対し、複数のファイルがあることを隠蔽しているかのように振舞っている
+
+        需要があれば一つの(video_num, low)に対しすべてのキャッシュを返す機能を追加しても良いが、
+        めんどくさいのでパス(難しくはないけど)
+
+    """
+
+    @classmethod
+    def _applyVideoCacheFileMixin(cls, VideoCacheFileClass,
+                                  get_dir_mtime_dict, getmtime):
+
+        class VideoCacheFile(VideoCacheFileClass):
+
+            @staticmethod
+            def __update_dir_mtime_dict(video_cache_info):
+                dirpath = os.path.dirname(
+                    video_cache_info.make_cache_file_path())
+
+                get_dir_mtime_dict()[dirpath] = getmtime(dirpath)
+
+            # キャッシュが存在していない場合内部情報だけ書き換えるので、ディレクトリのmtimeは更新されない
+            # しかし、人の手で更新されている可能性もあるので、キャッシュが存在している(していた)時のみ_update_dir_mtime_dictを実行する
+
+            def update_cache_info(self, new_video_cache_info):
+                # (video_num, low)を変えられてしまうとテーブルが崩壊するのでガードする
+
+                old_info = self.info
+                new_info = new_video_cache_info
+
+                if (self.info.video_num, self.info.low) !=\
+                        (new_info.video_num, new_info.low):
+                    raise NotImplementedError(
+                        "can not change video_num or low")
+
+                VideoCacheFileClass.update_cache_info(
+                    self, new_video_cache_info)
+
+                if self.exists():
+                    self.__update_dir_mtime_dict(old_info)
+                    self.__update_dir_mtime_dict(new_info)
+
+            def create(self):
+
+                rv = VideoCacheFileClass.create(self)
+
+                self.__update_dir_mtime_dict(self.info)
+
+                return rv
+
+            def remove(self):
+                existed = self.exists()
+
+                rv = VideoCacheFileClass.remove(self)
+
+                if existed:
+                    self.__update_dir_mtime_dict(self.info)
+
+                return rv
+
+            def open(self, *args, **kwargs):
+                rv = VideoCacheFileClass.open(self, *args, **kwargs)
+
+                self.__update_dir_mtime_dict(self.info)
+
+                return rv
+
+        return VideoCacheFile
+
     def __init__(
-            self, video_cache_file_manager, filesystem_wrapper, rootdir,
+            self, rootdir,
             VideoCacheClass=VideoCache, logger=logger):
-        self._video_cache_file_manager = video_cache_file_manager
+
+        filesystem_wrapper = pathutil.FileSystemWrapper()
+
+        # 再代入してはいけない
+        self._dir_mtime = {}
+
+        self._video_cache_file_manager = VideoCacheFileManager(
+            filesystem_wrapper,
+            self._applyVideoCacheFileMixin(
+                VideoCacheFile, lambda: self._dir_mtime, self._getmtime))
+
         self._filesystem_wrapper = filesystem_wrapper
         self._rootdir = os.path.normpath(rootdir)
         self._VideoCacheClass = VideoCacheClass
         self._logger = logger
 
-    def _make_video_cache(self, video_cache_info):
-        return self._VideoCacheClass(
-            self._video_cache_file_manager.get(
-                video_cache_info), self._logger)
+        self._video_cache_file_table = {}
 
-    def get_video_cache_pair(self, video_num):
-        """return: (非エコノミーvideo_cache, エコノミーvideo_cache)
-        存在しない場合はvideo_cacheが新規作成される(ファイルシステムへの反映は遅延される)"""
-        video_cache_info_query = VideoCacheInfo.make_query(
-            rootdir=self._rootdir, video_num=video_num)
+        self._construct_video_cache_file_table()
 
-        video_cache_list = self.get_video_cache_list(video_cache_info_query)
+    def _getmtime(self, path):
+        try:
+            return os.path.getmtime(os.path.realpath(path))
+        except OSError as e:
+            if e.errno == 2:
+                # symlink is broken.
 
-        video_cache_pair_dict = {False: None, True: None}
-        for is_low in (False, True):
-            for video_cache in video_cache_list:
-                if video_cache.info.low == is_low:
-                    video_cache_pair_dict[is_low] = video_cache
-                    break
+                # cygwinでuncパスへのリンクをしている場合もここにきてしまう
+                # \\SMB\dirへのリンクが
+                # //SMB/dirになってしまい
+                # 正規化されて/SMB/dirになってしまう
+                return os.path.getmtime(path)
+            else:
+                raise
 
-        for is_low in (False, True):
-            if video_cache_pair_dict[is_low] is None:
-                video_cache_info = VideoCacheInfo.create(
-                    rootdir=self._rootdir, video_type="sm",
-                    video_num=video_num, low=is_low, tmp=True)
-                video_cache_pair_dict[is_low] = self._make_video_cache(
-                    video_cache_info)
+    def _construct_video_cache_file_table(self):
 
-        return (video_cache_pair_dict[False], video_cache_pair_dict[True])
+        self._logger.info("construct cache table")
 
-    def get_video_cache(self, video_num, low):
-        """low: bool
-        return: VideoCache
-        存在しない場合はvideo_cacheが新規作成される(ファイルシステムへの反映は遅延される)
-        """
-        video_cache_info_query = VideoCacheInfo.make_query(
-            rootdir=self._rootdir, video_num=video_num, low=low)
-        video_cache_list = self.get_video_cache_list(video_cache_info_query)
-        if not video_cache_list:
-            video_cache_info = VideoCacheInfo.create(
-                rootdir=self._rootdir, video_type="sm",
-                video_num=video_num, low=low, tmp=True)
-            video_cache = self._make_video_cache(video_cache_info)
-            return video_cache
+        self._dir_mtime.clear()
 
-        return video_cache_list[0]
-
-    def get_video_cache_list(self, video_cache_info_query, recursive=True):
-        """video_cache_queryは要素にNoneを含められるVideoCacheInfo
-        主にVideoCacheInfo.make_query()の戻り値
-        video_cache_info_query.rootdir=Noneの場合、rootdirを適当に決める"""
-
-        video_cache_info_list = []
+        video_cache_file_list = []
         # rootdirは正規化されている
-        rootdir = (video_cache_info_query.rootdir
-                   if video_cache_info_query.rootdir is not None
-                   else self._rootdir)
+        rootdir = self._rootdir
         walk_iterator = self._filesystem_wrapper.walk(
             rootdir, followlinks=True)
-        if not recursive:
-            walk_iterator = [next(walk_iterator)]
 
         for dirpath, _, filenames in walk_iterator:
             dirpath = os.path.normpath(dirpath)
+            self._dir_mtime[dirpath] = self._getmtime(dirpath)
+
             subdirpath = dirpath[(len(rootdir) + 1):]  # "rootdir/"の部分だけ取り除く
             for filename in filenames:
 
@@ -703,14 +698,92 @@ class VideoCacheManager:
                     # キャッシュ以外のファイルがあると例外を投げられてしまう
                     continue
 
-                if video_cache_info_query.match(a_video_cache_info):
+                self._logger.debug("cache file found: %s", a_video_cache_info)
+                video_cache_file_list.append(
+                    self._video_cache_file_manager.get(a_video_cache_info))
 
-                    video_cache_info_list.append(a_video_cache_info)
+        for video_cache_file in video_cache_file_list:
+            video_cache_id = (
+                video_cache_file.info.video_num, video_cache_file.info.low)
+            if video_cache_id not in self._video_cache_file_table:
+                self._video_cache_file_table[video_cache_id] = video_cache_file
+
+        self._logger.info("finish constructing cache table")
+
+    def _update_video_cache_file_table(self):
+        """キャッシュディレクトリに変更が加わっていた場合
+        _construct_video_cache_file_table()が実行される"""
+
+        for dirpath in self._dir_mtime:
+            if self._dir_mtime[dirpath] != self._getmtime(dirpath):
+                self._logger.info("cache directory changed. "
+                                  "have to reconstruct cache table.")
+                self._construct_video_cache_file_table()
+                break
+
+    def _make_video_cache(self, video_cache_file):
+        return self._VideoCacheClass(video_cache_file, self._logger)
+
+    def get_video_cache_pair(self, video_num):
+        """return: (非エコノミーvideo_cache, エコノミーvideo_cache)
+        存在しない場合はvideo_cacheが新規作成される(ファイルシステムへの反映は遅延される)"""
+        return (self.get_video_cache(video_num, low=False),
+                self.get_video_cache(video_num, low=True))
+
+    def get_video_cache(self, video_num, low):
+        """low: bool
+        return: VideoCache
+        存在しない場合はvideo_cacheが新規作成される(ファイルシステムへの反映は遅延される)
+        """
+
+        self._update_video_cache_file_table()
+
+        video_cache_id = (video_num, low)
+
+        # 実際に存在していないキャッシュならばテーブルから消す
+        # それをしないと、例えば、cache/sub/にあるキャッシュを消して、
+        # もう一度新規作成するときに、get_video_cacheが古いcachefileを返し、
+        # cache/sub/に新規作成されてしまう
+
+        # また、存在していないキャッシュをupdate_infoでcache/sub/に移動した場合、
+        # get_video_cacheがcache/sub/にある事になっている(まだ実際には存在していない)キャッシュを返してしまう
+
+        if (video_cache_id in self._video_cache_file_table and
+                not self._video_cache_file_table[video_cache_id].exists()):
+
+            del self._video_cache_file_table[video_cache_id]
+
+        if video_cache_id not in self._video_cache_file_table:
+            video_cache_info = VideoCacheInfo.create(
+                rootdir=self._rootdir, video_type="sm",
+                video_num=video_num, low=low, tmp=True)
+
+            self._video_cache_file_table[video_cache_id] = \
+                self._video_cache_file_manager.get(video_cache_info)
+
+        video_cache_file = self._video_cache_file_table[video_cache_id]
+
+        return self._make_video_cache(video_cache_file)
+
+    def get_video_cache_list(self, video_cache_info_query):
+        """video_cache_queryは要素にNoneを含められるVideoCacheInfo
+        主にVideoCacheInfo.make_query()の戻り値
+        video_cache_info_query.rootdir=Noneの場合、rootdirを適当に決める
+
+        return: video_cache_list
+
+        video_cache_listは(video_num, low)に対し、video_cacheが1つに定まっている
+        """
+        self._update_video_cache_file_table()
 
         video_cache_list = []
-        for video_cache_info in video_cache_info_list:
-            video_cache = self._make_video_cache(video_cache_info)
-            video_cache_list.append(video_cache)
+
+        for video_cache_file in self._video_cache_file_table.itervalues():
+
+            if video_cache_info_query.match(video_cache_file.info):
+
+                video_cache_list.append(
+                    self._make_video_cache(video_cache_file))
 
         return video_cache_list
 
@@ -718,9 +791,14 @@ class VideoCacheManager:
             self, req, http_resource_getter_func, server_sockfile):
         """reqを基にローカルのキャッシュからレスポンスを作ったり、
         http_resource_getter_funcを用いてニコニコ動画のサーバから動画を取ってきたりする
-def http_resource_getter_func(req, server_sockfile) => ResponsePack:"""
+        def http_resource_getter_func(req, server_sockfile) => ResponsePack:"""
         _, video_num, low = get_videotype_videonum_islow__with_req(
             req, None)
         video_cache = self.get_video_cache(video_num, low)
         return video_cache.make_http_video_resource(
             req, http_resource_getter_func, server_sockfile)
+
+    def _check_video_cache_id_in_table(self, video_cache_id):
+        if video_cache_id not in self._video_cache_file_table:
+            raise RuntimeError("invalid video_cache_id(not in table)"
+                               ": %s" % video_cache_id)

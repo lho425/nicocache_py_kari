@@ -614,17 +614,8 @@ def main():
     extension_modules = load_extension_modules()
 
     # ファクトリやらシングルトンやらの初期化
-    if get_config_bool("global", "dirCache"):
-        filesystem_wrapper = libnicocache.pathutil.DirCachingFileSystemWrapper(
-            cache_dir_path)
-    else:
-        filesystem_wrapper = libnicocache.pathutil.FileSystemWrapper()
-
-    video_cache_file_manager = libnicocache.VideoCacheFileManager(
-        filesystem_wrapper, libnicocache.VideoCacheFile)
 
     video_cache_manager = libnicocache.VideoCacheManager(
-        video_cache_file_manager, filesystem_wrapper,
         cache_dir_path, VideoCache)
 
     video_info_rewriter = rewriter.Rewriter(video_cache_manager)
