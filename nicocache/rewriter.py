@@ -52,8 +52,10 @@ class NicoCacheGinzaRewriter(NicoCacheRewriterMixin,
                 " Rewrite video information to use that.",
                 "" if not is_low else " low")
 
+        # めんどくさいからsm203207の動画があるサーバに書き換える
+        # crossdomain.xmlがそのサーバに飛ぶ
         flvinfo_dict["url"] = [
-            'http://smile-nicocache00.nicovideo.jp/smile?m=' +
+            'http://smile-com62.nicovideo.jp/smile?m=' +
             video_num + ".00000"]
 
         if is_low:

@@ -109,6 +109,16 @@ class TestVideoCacheInfo(unittest.TestCase):
 
         self.assertFalse(query_info.match(info))
 
+    def test__replace(self):
+        cache_file_name = "subdir1/subdir2/tmp_sm12345low_title56789.avi.mp4"
+        info = VideoCacheInfo.create_from_relpath(
+            cache_file_name, rootdir="./cache/")
+
+        new_info = info.replace(subdir="././././save")
+
+        self.assertEqual(new_info, VideoCacheInfo.create_from_relpath(
+            "save/tmp_sm12345low_title56789.avi.mp4", rootdir="./cache/"), )
+
 
 class NicoCacheTestCase(unittest.TestCase):
 

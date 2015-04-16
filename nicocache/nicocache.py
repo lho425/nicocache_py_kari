@@ -152,7 +152,6 @@ _default_global_config = {
     "listenPort": 8080,
     "proxyHost": "",
     "proxyPort": 8080,
-    "dirCache": False,
     "touchCache": True,
     "cacheFolder": "",  # デフォルトは./cacheだが、それはこの項目を参照するときに""かどうかで判断する
     "autoSave": True,
@@ -165,7 +164,6 @@ _default_global_config = {
 # _init_config()で一度だけ初期化される
 _static_global_config = {
     "listenPort": None,
-    "dirCache": None,
     "cacheFolder": None,
 }
 
@@ -182,9 +180,6 @@ def _init_config():
 
     _static_global_config["listenPort"] = _config_loader.get_config_int(
         "global", "listenPort", _default_global_config)
-
-    _static_global_config["dirCache"] = _config_loader.get_config_bool(
-        "global", "dirCache", _default_global_config)
 
     _static_global_config["cacheFolder"] = _config_loader.get_config(
         "global", "cacheFolder", _default_global_config)
@@ -518,16 +513,15 @@ def load_extension_modules():
     importer = pkgutil.get_importer("extensions")
     for i in importer.iter_modules():
         modname = i[0]
-        mod = importlib.import_module("." + modname, "extensions")
-        is_package = i[1]
-        if not is_package and mod.__file__.endswith(".pyc"):
-            # パッケージのときは.pycしかなくてもよい
-            if not os.path.exists(mod.__file__[:-1]):
+
+        if (os.path.exists("extensions/" + modname + ".pyc") and
+                not os.path.exists("extensions/" + modname + ".py")):
                 # extensions/mod.pyが存在しないとき
                 # つまりpycしかないとき
-                # extension登録をスキップ
-                continue
+                # extensionのロードをスキップ
+            continue
 
+        mod = importlib.import_module("." + modname, "extensions")
         extension_modules.append(mod)
 
     return extension_modules
@@ -615,17 +609,8 @@ def main():
     extension_modules = load_extension_modules()
 
     # ファクトリやらシングルトンやらの初期化
-    if get_config_bool("global", "dirCache"):
-        filesystem_wrapper = libnicocache.pathutil.DirCachingFileSystemWrapper(
-            cache_dir_path)
-    else:
-        filesystem_wrapper = libnicocache.pathutil.FileSystemWrapper()
-
-    video_cache_file_manager = libnicocache.VideoCacheFileManager(
-        filesystem_wrapper, libnicocache.VideoCacheFile)
 
     video_cache_manager = libnicocache.VideoCacheManager(
-        video_cache_file_manager, filesystem_wrapper,
         cache_dir_path, VideoCache)
 
     video_info_rewriter = rewriter.Rewriter(video_cache_manager)
