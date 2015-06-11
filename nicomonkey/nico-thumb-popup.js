@@ -28,7 +28,14 @@ function logger_debug(){
         if (target.tagName === "A" && !target.onmouseover && nicoURLMatch) {
             var contentType = (nicoURLMatch[1] || "watch");
             var contentID = nicoURLMatch[2];
+
+            // 今のニコ動はページをリロードせずに描画し直すので
+            // リンクからマウスアウトする前にリンクが消えることがある。
+            // そのせいでポップアップが残った場合の対症療法で
+            // どっかのリンクをマウスオーバーしたら消えるようにしておく
+            popThumbOff();
             popThumbOn(contentType, contentID, event);
+
             // 一度popupしたリンク要素はイベント登録。
             target.onmouseover = function(event){
                 popThumbOn(contentType, contentID, event);
@@ -182,6 +189,9 @@ function logger_debug(){
     };
 
     window.popThumbOff = function() {
+        if (!currentPopupThumb)
+            return;
+
         currentPopupThumb.style.display = "none";
         document.removeEventListener("mousemove", currentMouseMoveEventListener, false);
     }
