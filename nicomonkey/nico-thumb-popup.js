@@ -25,27 +25,14 @@ function logger_debug(){
         var target = event.target;
         while (!/^(A|BODY)$/.test(target.tagName)) target = target.parentNode;
         nicoURLMatch = nicoURLPattern.exec(target.href);
-        if (target.tagName === "A" && !target.onmouseover && nicoURLMatch) {
+        if (target.tagName === "A" && nicoURLMatch) {
             var contentType = (nicoURLMatch[1] || "watch");
             var contentID = nicoURLMatch[2];
 
-            // 今のニコ動はページをリロードせずに描画し直すので
-            // リンクからマウスアウトする前にリンクが消えることがある。
-            // そのせいでポップアップが残った場合の対症療法で
-            // どっかのリンクをマウスオーバーしたら消えるようにしておく
-            popThumbOff();
             popThumbOn(contentType, contentID, event);
 
-            // 一度popupしたリンク要素はイベント登録。
-            target.onmouseover = function(event){
-                popThumbOn(contentType, contentID, event);
-            };
-            target.onmouseout = function(){
-                // これがないと動画を移動した時に右上の投稿者のポップアップが前の投稿者のままになってしまう
-                target.onmouseover = null;
-
-                popThumbOff();
-            };
+        } else {
+            popThumbOff();
         }
     });
 })();
@@ -144,6 +131,12 @@ function logger_debug(){
     window.popThumbOn = function(contentType, contentID, event){
         var thumbIframe = getThumbIframe(contentType, contentID);
 
+        // こうすることでポップアップは常に一つ表示される。
+        // ポップアップが残って複数表示されるなんてことはなくなる。
+        if (currentPopupThumb !== thumbIframe) {
+            popThumbOff();
+        }
+
         currentPopupThumb = thumbIframe;
         currentPopupThumb.style.display = "";
 
@@ -193,6 +186,7 @@ function logger_debug(){
             return;
 
         currentPopupThumb.style.display = "none";
+        currentPopupThumb = null;
         document.removeEventListener("mousemove", currentMouseMoveEventListener, false);
     }
 })();
