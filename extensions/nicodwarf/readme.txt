@@ -29,9 +29,10 @@ passwordFileは相対パスでも構いません。その場合、NicoCache_Py.b
 
 # License
 
-WTFPLv2 (license.txtに従います)
+pythonのソースコードとこのreadmeは WTFPLv2 (license.txtに従います) です。無保証です。
 
-無保証です。
+同梱している cacert.pem は Mozilla Public License, v. 2.0 です。
+
 
 
 # 作者

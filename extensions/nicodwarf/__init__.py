@@ -17,6 +17,9 @@ from proxtheta.core import httpmes, iowrapper
 from libnicocache.base import VideoCacheInfo
 
 
+_certfile_path = os.path.join(os.path.dirname(__file__), "cacert.pem")
+
+
 _video_cache_manager = None
 
 default_config = {"passwordFile": None}
@@ -94,7 +97,7 @@ Content-Type: application/x-www-form-urlencoded
     req.set_body(body)
 
     sock = socket.create_connection(("secure.nicovideo.jp", 443))
-    sock = ssl.wrap_socket(sock, ca_certs="cacert.pem",
+    sock = ssl.wrap_socket(sock, ca_certs=_certfile_path,
                            cert_reqs=ssl.CERT_REQUIRED)
 
     sock.write(str(req))
