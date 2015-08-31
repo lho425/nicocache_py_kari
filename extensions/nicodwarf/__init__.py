@@ -28,6 +28,10 @@ class HTTPResponseError(Exception):
     pass
 
 
+class NicoNicoAccessError(Exception):
+    pass
+
+
 class NicoNicoLoginError(Exception):
     pass
 
@@ -128,9 +132,10 @@ def get_nicohistory(video_id, cookie):
             break
 
     if not cookie:
-        raise Exception("no nicohistory cookie from server: \n"
-                        "%s:\n"
-                        "%s", "http://www.nicovideo.jp/watch/" + video_id, res)
+        raise NicoNicoAccessError("no nicohistory cookie from server: \n"
+                                  "%s:\n"
+                                  "%s" % ("http://www.nicovideo.jp/watch/"
+                                          + video_id, res))
 
     return cookie
 
@@ -141,8 +146,12 @@ def get_video_url(video_id, cookie):
         "http://flapi.nicovideo.jp/api/getflv/" + video_id,
         dict(cookie=cookie))
 
-    video_url = urllib.unquote(
-        re.match(r".*url=([^&]*)(&.*)?", res.body).group(1))
+    m = re.match(r".*url=([^&]*)(&.*)?", res.body)
+
+    if not m:
+        raise NicoNicoAccessError("can not get getflv info of %s" % video_id)
+
+    video_url = urllib.unquote(m.group(1))
 
     return video_url
 
