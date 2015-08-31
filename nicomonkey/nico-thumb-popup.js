@@ -179,7 +179,7 @@ function logger_debug(){
                 console.log("nico-thumb-popup: unknown content:", contentType + "/" + contentID);
                 thumbIframePath = "/thumb/" + contentID;
             }
-            thumbIframe.src = "http://" + host + "/" + thumbIframePath;
+            thumbIframe.src = "http://" + host + thumbIframePath;
             nicoThumb.appendChild(thumbIframe);
             nicoThumbTable[path] = thumbIframe;
         }
