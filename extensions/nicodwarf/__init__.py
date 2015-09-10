@@ -207,6 +207,8 @@ def fetch_all_saved_video():
         try:
 
             video_id = video_cache.info.video_id
+            logger.info("incomplete cache found: %s",
+                        video_cache.info.make_cache_file_path())
             logger.info("fetching %s", video_id)
 
             nonlow_video_cache = _video_cache_manager.get_video_cache(
@@ -245,7 +247,7 @@ def fetch_all_saved_video():
                 proxy=("localhost", nicocache_port))
 
             if res.status_code != 200:
-                logger.error("denied: %s", res)
+                logger.error("access to nicovideo was denied: \n%s", res)
                 continue
 
             while True:
