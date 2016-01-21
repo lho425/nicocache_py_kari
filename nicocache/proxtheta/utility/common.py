@@ -41,8 +41,9 @@ def read_file(fileobj, size=-1, bufsize=8192):
     return distf.read()
 
 
-def copy_chunked_body_file(srcf):
-    """extract chunked data from srcf and copy to distf"""
+def extract_chunked_body_file(srcf):
+    """extract chunked data from srcf and copy to distf
+    only extract body (not header)"""
     distf = StringIO.StringIO()
     while 1:
         size_str = srcf.readline()
@@ -65,7 +66,7 @@ def load_chunked_body(res, body_resource):
         body_file = StringIO.StringIO(body_resource)
     else:
         body_file = body_resource
-    body = copy_chunked_body_file(body_file)
+    body = extract_chunked_body_file(body_file)
     del res.headers["Transfer-Encoding"]
     res.body = body
     res.set_content_length()
@@ -73,7 +74,7 @@ def load_chunked_body(res, body_resource):
     return res
 
 
-def load_boody(res, body_file, hint_req=None):
+def load_body(res, body_file, hint_req=None):
     if res.is_chunked():
         return load_chunked_body(res, body_file)
 
@@ -87,7 +88,7 @@ def load_boody(res, body_file, hint_req=None):
 
 
 def unzip_http_body(res):
-    """unzip and load body to res.body.
+    """unzip res.body.
     arg: res.body must not be None"""
 
     content = None
