@@ -50,10 +50,8 @@ def transfer_resbody_to_client(res, body_file, client_file, req=None):
     if httpmes.get_transfer_length(res, req) == "unknown":
         raise RuntimeError("unknown http transfer length")
 
-
     if res.is_chunked():
         trancefer_chunked(body_file, client_file)
-
 
     elif res.is_connection_close():
         streaming(body_file, client_file)  # reply body

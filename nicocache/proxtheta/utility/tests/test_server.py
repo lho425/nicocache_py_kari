@@ -8,6 +8,7 @@ from ...core import httpmes
 
 from io import BytesIO
 
+
 class Test_streaming(unittest.TestCase):
 
     def test_size_not_given(self):
@@ -34,7 +35,7 @@ class Test_streaming(unittest.TestCase):
 class Test_trancefer_chunked(unittest.TestCase):
 
     def test(self):
-        
+
         srcf = create_chunked_body_file([b"abc", b"def", b"ghi"])
 
         destf = BytesIO()
@@ -43,17 +44,18 @@ class Test_trancefer_chunked(unittest.TestCase):
 
         self.assertEquals(srcf.getvalue(), destf.getvalue())
 
-
     @unittest.expectedFailure
     def test_with_chunk_extension(self):
 
-        srcf = create_chunked_body_file([(b"abc", 'ext1', 'ext2="val"'), b"def", b"ghi"])
+        srcf = create_chunked_body_file(
+            [(b"abc", 'ext1', 'ext2="val"'), b"def", b"ghi"])
 
         destf = BytesIO()
 
         trancefer_chunked(srcf, destf)
 
         self.assertEquals(srcf.getvalue(), destf.getvalue())
+
 
 class Test_transfer_resbody_to_client(unittest.TestCase):
 
@@ -64,7 +66,7 @@ class Test_transfer_resbody_to_client(unittest.TestCase):
         body_file = BytesIO(b"no body expected on 304")
 
         client_file = BytesIO()
-        
+
         transfer_resbody_to_client(res, body_file, client_file)
 
         self.assertEquals(b"", client_file.getvalue())
@@ -74,7 +76,7 @@ class Test_transfer_resbody_to_client(unittest.TestCase):
         res = create_http11_response(200, "OK")
 
         body_file = BytesIO()
-        
+
         client_file = BytesIO()
 
         with self.assertRaises(RuntimeError):
@@ -82,12 +84,13 @@ class Test_transfer_resbody_to_client(unittest.TestCase):
 
     def test_CONNECT_with_req(self):
 
-        req = httpmes.create_http11_request(method="CONNECT", uri="testhost.test:8888")
+        req = httpmes.create_http11_request(
+            method="CONNECT", uri="testhost.test:8888")
 
         res = create_http11_response(200, "OK")
 
         body_file = BytesIO()
-        
+
         client_file = BytesIO()
 
         with self.assertRaises(RuntimeError):

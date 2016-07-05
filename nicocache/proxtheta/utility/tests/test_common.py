@@ -9,6 +9,7 @@ from ..common import (copy_file, extract_chunked_body_file,
 
 from .helper import *
 
+
 class Test_copy_file(unittest.TestCase):
 
     def test_with_size(self):
@@ -30,8 +31,6 @@ class Test_copy_file(unittest.TestCase):
         copy_file(f1, f2, size=-1)
 
         self.assertEqual(f1.getvalue(), f2.getvalue())
-
-
 
 
 class Test_extract_chunked_body_file(unittest.TestCase):
@@ -83,8 +82,6 @@ class Test_load_body(unittest.TestCase):
 
         self.assertEqual(b"あいうえおあああ" * 10, res.body)
         self.assertEqual(len(b"あいうえおあああ" * 10), res.get_content_length())
-
-
 
 
 class Test_unzip_http_body(unittest.TestCase):

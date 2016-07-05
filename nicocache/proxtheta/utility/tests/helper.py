@@ -7,7 +7,6 @@ import zlib
 def create_chunked_body_file(bytes_seq):
     """bytes_seq: [elem]
     elem: bytes or [bytes, chunk_extension, chunk_extension, ...]"""
-    
 
     bio = BytesIO()
 
@@ -18,7 +17,7 @@ def create_chunked_body_file(bytes_seq):
         else:
             bytes_data = elem[0]
             chunk_extensions = elem[1:]
-            
+
         bio.write(b"%x" % (len(bytes_data)))
         for ext in chunk_extensions:
             bio.write(b";")
@@ -31,6 +30,7 @@ def create_chunked_body_file(bytes_seq):
     bio.seek(0)
 
     return bio
+
 
 def create_gzip_response(a_bytes):
     bio = BytesIO()

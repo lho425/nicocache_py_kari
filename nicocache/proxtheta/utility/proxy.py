@@ -140,9 +140,9 @@ class ResponseFilter(object):
 
             # response body already loaded as not chunked, not zipped file
             if (res.body is not None and  # loaded
-                not res.is_chunked() and  # not chunked
-                # as unzipped
-                res.headers.get("Content-Encoding") is None):
+                    not res.is_chunked() and  # not chunked
+                    # as unzipped
+                    res.headers.get("Content-Encoding") is None):
 
                 assert res.body is not None
                 res = self.filtering(res, req, info)
