@@ -175,9 +175,9 @@ class ResponseFilter(object):
 class FilteringResponseServers(object):
 
     def __init__(self,
-                 request_filters=[],
-                 response_servers=[],
-                 response_filters=[]):
+                 request_filters=(),
+                 response_servers=(),
+                 response_filters=()):
         """
         request_filters: list of RequestFilter
         response_servers: list of ResponseServers
