@@ -316,7 +316,7 @@ class VideoCache(object):
         self._video_cache_file.create()
 
         self._logger.info(
-                "remove cache: %s", 
+                "create cache: %s", 
                 self._video_cache_file.info.make_cache_file_path())
 
     def remove(self):
