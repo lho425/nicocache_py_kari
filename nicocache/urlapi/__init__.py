@@ -103,7 +103,7 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
         video_cache_pair = self.video_cache_manager.get_video_cache_pair(
             video_num)
         logs = []
-        # dirty!!! 以下のofrループが各コマンドで殆どコピペなのをなんとかする
+        # dirty!!! 以下のforループが各コマンドで殆どコピペなのをなんとかする
         for video_cache in video_cache_pair:
             if (video_cache.exists() and
                     video_cache.info.subdir == os.path.normpath("")):
