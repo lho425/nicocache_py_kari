@@ -105,8 +105,12 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
         logs = []
         # dirty!!! 以下のforループが各コマンドで殆どコピペなのをなんとかする
         for video_cache in video_cache_pair:
-            if (video_cache.exists() and
-                    video_cache.info.subdir == os.path.normpath("")):
+            if (video_cache.info.subdir == os.path.normpath("")):
+
+                # キャッシュがまだ存在していない場合は
+                # エコノミー/非エコノミーにかかわらず大きさ0のファイルを作る
+                if not video_cache.exists():
+                    video_cache.create()
 
                 status_str = video_cache.update_info(
                     video_id=thumbinfo.video_id,
