@@ -396,6 +396,7 @@ class VideoCache(object):
             self._video_cache_file, respack.body_file, complete_video_size)
         respack.res.status_code = 200
         respack.res.reason_phrase = "OK"
+        del respack.res.headers["Content-Range"]  # because the response is 200
         respack.res.headers["Content-Length"] = str(complete_video_size)
         return respack
 
