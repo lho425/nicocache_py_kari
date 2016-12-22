@@ -391,7 +391,8 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
         data = respack.body_file.read()
 
         self.assertEqual(data, "a" * 100 + "b" * 100)
-
+        self.assertEqual(respack.res.status_code, 200)
+        self.assertIsNone(respack.res.headers.get("Content-Range", None))
         respack.close()
 
 
