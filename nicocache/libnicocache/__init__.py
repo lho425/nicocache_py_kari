@@ -622,7 +622,11 @@ class VideoCache(object):
             self._video_cache_file = video_cache_file
             cachefile = self._video_cache_file.open(readonly=False)
 
+            self._complete_length = length
+            self.__offset = 0
+
             if start is not None:
+                self.__offset = start
                 cachefile.seek(start)
                 if end is not None:
                     length = end - start
@@ -631,6 +635,17 @@ class VideoCache(object):
 
             CachingReader.__init__(
                 self, cachefile, originalfile, length, complete_cache, logger)
+
+        def _is_cache_completed(self):
+
+            # Range リクエストの場合、
+            # ダウンロード終了 == キャッシュ完了
+            # とは限らないので注意！
+            if self._left_size == 0:
+                if self._length + self.__offset == self._complete_length:
+                    return True
+
+            return False
 
         def read(self, size=-1):
             self._logger.debug(
@@ -651,7 +666,7 @@ class VideoCache(object):
                 # on_close_commandsは存在したら消えないので、時間差不整合は起きない
                 self._video_cache_file.on_close_commands.execute()
 
-            if self._left_size == 0:
+            if self._is_cache_completed():
                 # close()するまでハードディスクにかきこまれてないかもしれないので
                 # read()内でself._left_size == 0をチェックするのではなく、ここでチェックしてログを残す
                 self._video_cache_file.change_to_complete_cache()
