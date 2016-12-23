@@ -208,6 +208,49 @@ def get_partial_http_resource(
         req.headers["Range"] = (''.join(("bytes=", str(first_byte_pos), "-")))
     return get_http_resource_func(req, server_sockfile)
 
+
+def _parse_range_str(range_header_str):
+    """
+    "bytes=0-1" => [(0, 1)]
+    "bytes=0-1,2-,-3,4-5" => [(0, 1), (2, None), (None, -3), (4, 5)]
+    if not byte-content-range, return None
+    """
+
+    # 参考
+    # https://triple-underscore.github.io/RFC7233-ja.html
+
+    # range_header_str の中身の例:
+    # "bytes=0-1,2-,-3,4-5"
+
+    unit, range_str = range_header_str.split("=")
+
+    if unit != "bytes":
+        return None
+
+    # remove white space
+    range_str = range_str.translate(None, " ")
+
+    range_strs = range_str.split(",")
+    # 複雑なrangeリクエストはomitする
+    del range_str
+
+    ranges = []
+
+    for range_str in range_strs:
+        if range_str.startswith("-"):
+            ranges.append((None, -int(range_str)))
+        else:
+            range_ = range_str.split("-")
+            first = int(range_[0])
+            if range_[1] == "":
+                # eg: "bytes=100-"
+                last = None
+            else:
+                last = int(range_[1])
+            ranges.append((first, last))
+
+    return ranges
+
 # アルゴリズム
 
 # 新規cache
@@ -316,8 +359,8 @@ class VideoCache(object):
         self._video_cache_file.create()
 
         self._logger.info(
-                "create cache: %s", 
-                self._video_cache_file.info.make_cache_file_path())
+            "create cache: %s",
+            self._video_cache_file.info.make_cache_file_path())
 
     def remove(self):
 
@@ -344,26 +387,62 @@ class VideoCache(object):
         return not self.info.tmp
 
     def _make_http_video_resource_with_comlete_localcache(
-            self, server_sockfile):
+            self, server_sockfile, bytes_range=None):
+        """
+        bytes_range: (first_byte_pos, last_byte_pos)
+        bytes_range: (first_byte_pos, None)
+        bytes_range: None
+        """
 
         self._logger.info(
             "using cache: %s", self.info.make_cache_file_path())
-        res = httpmes.HTTPResponse(("HTTP/1.1", 200, "OK"))
+
+        if bytes_range is not None:
+            first, last = bytes_range
+            if last is None:
+                last = self._video_cache_file.get_size() - 1
+                end = None
+            else:
+                end = last + 1
+            res = httpmes.HTTPResponse(("HTTP/1.1", 206, "Partial Content"))
+            res.headers["Content-Range"] = (
+                "bytes " + str(first) + "-" + str(last) + "/" +
+                str(self._video_cache_file.get_size()))
+            res.set_content_length(last - first + 1)
+
+        else:
+            first, end = None, None
+            res = httpmes.HTTPResponse(("HTTP/1.1", 200, "OK"))
+            res.set_content_length(self._video_cache_file.get_size())
+
         cachefile_path = self.info.make_cache_file_path()
-        res.set_content_length(self._video_cache_file.get_size())
         mimetype = guess_mimetype(cachefile_path)
         if mimetype:
             res.headers["Content-Type"] = mimetype
+        res.headers["Accept-Encoding"] = "bytes"
         respack = ResponsePack(
-            res, body_file=self._CompleteCacheReader(self._video_cache_file),
+            res, body_file=self._CompleteCacheReader(self._video_cache_file,
+                                                     start=first, end=end),
             server_sockfile=server_sockfile)
         return respack
 
     def _make_http_video_resource_with_tmp_localcache(
             self, req,
-            http_resource_getter_func, server_sockfile):
+            http_resource_getter_func, server_sockfile, bytes_range=None):
+        """
+        bytes_range: (first_byte_pos, last_byte_pos)
+        bytes_range: (first_byte_pos, None)
+        bytes_range: None
+        """
 
-        del req.headers["Accept-Encoding"]
+        if bytes_range is not None:
+            first, last = bytes_range
+            if first >= self._video_cache_file.get_size():
+                bytes_range = None
+                self._logger.info(u"要求された動画の範囲がキャッシュのサイズを超えています。")
+                self._logger.info(
+                    "omit caching. download video from server directly.")
+                return http_resource_getter_func(req, server_sockfile)
 
         is_new_cache = not self._video_cache_file.exists()
 
@@ -400,12 +479,32 @@ class VideoCache(object):
                 "Partial download from %d byte",
                 self._video_cache_file.get_size())
 
-        respack.body_file = self._NicoCachingReader(
-            self._video_cache_file, respack.body_file, complete_video_size)
-        respack.res.status_code = 200
-        respack.res.reason_phrase = "OK"
-        del respack.res.headers["Content-Range"]  # because the response is 200
-        respack.res.headers["Content-Length"] = str(complete_video_size)
+        if bytes_range is not None:
+            if last is not None:
+                end = last + 1
+            else:
+                end = None
+            respack.body_file = self._NicoCachingReader(
+                self._video_cache_file, respack.body_file, complete_video_size,
+                start=first, end=end)
+
+            if last is None:
+                last = self._video_cache_file.get_size() - 1
+            respack.res.headers["Content-Range"] = (
+                "bytes " + str(first) + "-" + str(last) + "/" +
+                str(complete_video_size))
+            respack.res.set_content_length(last - first + 1)
+            respack.res.status_code = 206
+            respack.res.reason_phrase = "Partial Content"
+        else:
+            respack.body_file = self._NicoCachingReader(
+                self._video_cache_file, respack.body_file, complete_video_size)
+            respack.res.status_code = 200
+            respack.res.reason_phrase = "OK"
+            # because the response is 200
+            del respack.res.headers["Content-Range"]
+            respack.res.headers["Content-Length"] = str(complete_video_size)
+
         return respack
 
     def _get_http_video_resource(
@@ -480,17 +579,30 @@ class VideoCache(object):
         http_resource_getter_funcを用いてニコニコ動画のサーバから動画を取ってきたりする
         def http_resource_getter_func(req, server_sockfile) => ResponsePack:
         """
+        def get_req_range(req):
+
+            range_header_str = req.headers.get("Range", None)
+            if not range_header_str:
+                return None
+            r = _parse_range_str(range_header_str)
+            if r:
+                return r[0]
+            else:
+                return None
+
+        bytes_range = get_req_range(req)
 
         if not self.info.tmp:
             # 完全なキャッシュがローカルにある場合
             return self._make_http_video_resource_with_comlete_localcache(
-                server_sockfile)
+                server_sockfile, bytes_range=bytes_range)
 
         else:
             # 非完全なキャッシュがローカルにある場合
             # もしくはキャッシュがなく新規作成するとき
             return self._make_http_video_resource_with_tmp_localcache(
-                req, http_resource_getter_func, server_sockfile)
+                req, http_resource_getter_func, server_sockfile,
+                bytes_range=bytes_range)
 # _NicoCachingReaderにはvideo_cacheとvideo_cache_fileどちらを渡すべきか？
 
     class _NicoCachingReader(CachingReader):
@@ -500,13 +612,23 @@ class VideoCache(object):
             return self._video_cache_file.info.make_cache_file_path()
 
         def __init__(self, video_cache_file, originalfile, length,
-                     complete_cache=False, logger=logger):
+                     complete_cache=False,
+                     start=None, end=None,
+                     logger=logger):
             #             if 0:
             #                 """arg type"""
             #                 video_cache_info = libnicocache.VideoCacheInfo()
 
             self._video_cache_file = video_cache_file
             cachefile = self._video_cache_file.open(readonly=False)
+
+            if start is not None:
+                cachefile.seek(start)
+                if end is not None:
+                    length = end - start
+                else:
+                    length = length - start
+
             CachingReader.__init__(
                 self, cachefile, originalfile, length, complete_cache, logger)
 
@@ -546,15 +668,45 @@ class VideoCache(object):
             except Exception:
                 pass
 
-    class _CompleteCacheReader(iowrapper.FileWrapper):
+    class _CompleteCacheReader(FileWrapper):
 
-        def __init__(self, video_cache_file):
+        def __init__(self, video_cache_file, start=None, end=None):
+            """
+            start, end は要求されるキャッシュの範囲
+            """
             self._video_cache_file = video_cache_file
             FileWrapper.__init__(
                 self, video_cache_file.open(readonly=True), close=True)
 
+            self.__length = video_cache_file.get_size()
+
+            if start:
+                self.seek(start)
+                if end is not None:
+                    self.__length = end - start
+
+            self.__left_size = self.__length
+
+        def read(self, size=-1):
+            if size >= 0:
+                if self.__left_size - size < 0:
+                    size = self.__left_size
+            else:
+                size = self.__left_size
+
+            rv = FileWrapper.read(self, size=size)
+
+            self.__left_size -= len(rv)
+            return rv
+
+        def readline(self, size=-1):
+            raise NotImplementedError
+
+        def readlines(self):
+            raise NotImplementedError
+
         def close(self):
-            iowrapper.FileWrapper.close(self)
+            FileWrapper.close(self)
 
             if hasattr(self._video_cache_file, "on_close_commands"):
                 # on_close_commandsは存在したら消えないので、時間差不整合は起きない
