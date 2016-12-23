@@ -441,7 +441,8 @@ class VideoCache(object):
                 bytes_range = None
                 self._logger.info(u"要求された動画の範囲がキャッシュのサイズを超えています。")
                 self._logger.info(
-                    "omit caching. download video from server directly.")
+                    "omit caching %s. download video from server directly.",
+                    self.info.make_cache_file_path())
                 return http_resource_getter_func(req, server_sockfile)
 
         is_new_cache = not self._video_cache_file.exists()
