@@ -318,7 +318,7 @@ def applyVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
             def close(self):
                 VideoCacheClass._NicoCachingReader.close(self)
 
-                if (self._left_size == 0 and self._low_cache is not None and
+                if (self._is_cache_completed() and self._low_cache is not None and
                     get_config_bool(
                         "global", "autoRemoveLow")):
                     self._low_cache.remove()
