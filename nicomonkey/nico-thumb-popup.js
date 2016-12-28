@@ -9,6 +9,16 @@
 // 著者: LHO425
 // ライセンス: WTFPLv2
 
+
+/*
+ * 基本的に、動画へのリンクにマウスが乗ったらpopupを表示し、
+ * リンクから外れたらpopupを消す、ということを行う。
+ * しかし、jsのDOMにより以下のようなこと
+ *   - リンクにマウスが乗っているときにリンク要素が突然消える
+ *   - マウスが乗っているリンクが、突然別のリンクに変わる
+ * ということを考慮しなくてはいけない。
+ */
+
 window.nicoThumb = {};
 window.nicoThumb.debug = false;
 
@@ -25,21 +35,25 @@ function logger_debug(){
 	var target = event.target;
 	while (!/^(A|BODY)$/.test(target.tagName)) target = target.parentNode;
 	nicoURLMatch = nicoURLPattern.exec(target.href);
-	if (target.tagName === "A" && !target.onmouseover && nicoURLMatch) {
-	    var contentType = (nicoURLMatch[1] || "watch");
-	    var contentID = nicoURLMatch[2];
-	    popThumbOn(contentType, contentID, event);
-	    // 一度popupしたリンク要素はイベント登録。
-	    target.onmouseover = function(event){
-		popThumbOn(contentType, contentID, event);
-	    };
-	    target.onmouseout = function(){
-		// これがないと動画を移動した時に右上の投稿者のポップアップが前の投稿者のままになってしまう
-		target.onmouseover = null;
+	if (target.tagName === "A" && nicoURLMatch) {
+            if (!target.onmouseover) {
+	        var contentType = (nicoURLMatch[1] || "watch");
+	        var contentID = nicoURLMatch[2];
+	        popThumbOn(contentType, contentID, event);
+	        // 一度popupしたリンク要素はイベント登録。
+	        target.onmouseover = function(event){
+		    popThumbOn(contentType, contentID, event);
+	        };
+	        target.onmouseout = function(){
+		    // これがないと動画を移動した時に右上の投稿者のポップアップが前の投稿者のままになってしまう
+		    target.onmouseover = null;
 
-		popThumbOff();
-	    };
-	}
+		    popThumbOff();
+	        };
+            }
+	} else {
+            popThumbOff();
+        }
     });
 })();
 
@@ -136,7 +150,9 @@ function logger_debug(){
 
     window.popThumbOn = function(contentType, contentID, event){
 	var thumbIframe = getThumbIframe(contentType, contentID);
-	
+	if (currentPopupThumb !== thumbIframe) {
+            popThumbOff();
+        }
 	currentPopupThumb = thumbIframe;
 	currentPopupThumb.style.display = "";
 
@@ -182,7 +198,9 @@ function logger_debug(){
     };
 
     window.popThumbOff = function() {
-	currentPopupThumb.style.display = "none";
-	document.removeEventListener("mousemove", currentMouseMoveEventListener, false);
+        if (currentPopupThumb !== null) {
+	    currentPopupThumb.style.display = "none";
+	    document.removeEventListener("mousemove", currentMouseMoveEventListener, false);
+        }
     }
 })();
