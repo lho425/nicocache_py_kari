@@ -12,6 +12,7 @@ import proxtheta
 from proxtheta.core import iowrapper
 import proxtheta.utility
 from .. import pathutil, VideoCacheFileManager
+from .. import _parse_range_str
 
 from . import test_base
 from .. import base
@@ -160,15 +161,15 @@ class SocketWrapperMock(iowrapper.FileWrapper):
             if "Range" in req.headers:
                 res = httpmes.HTTPResponse(
                     ("HTTP/1.1", 206, "Partial Content"))
-
-                first_pos = int(req.headers["Range"][6:][:-1])
-                # Range: bytes=12-
-
-                httpmes.set_body(res, content[first_pos:])
+                first_pos, last_pos = _parse_range_str(req.headers["Range"])[0]
+                end_pos = last_pos + 1 if last_pos is not None else None
+                content_ = content[first_pos:end_pos]
+                httpmes.set_body(res, content_)
 
                 res.headers["Content-Range"] = ("bytes %d-%d/%d" %
                                                 (first_pos,
-                                                 len(content) - 1,
+                                                 # last can be None
+                                                 first_pos + len(content_) - 1,
                                                  len(content)))
                 res.headers["Content-Type"] = "video/mp4"
 
@@ -356,6 +357,31 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
 
         respack.close()
 
+    def test_create_response_with_complete_localcache_with_range(self):
+        host = "smile-com42.nicovideo.jp"
+        req = httpmes.HTTPRequest(
+            ("GET", ("http", host, None, "/smile", "v=8.0", ""), "HTTP/1.1"))
+        req.headers["Host"] = host
+        req.headers["Range"] = "bytes=90-109"
+
+        def http_resource_getter_func(req, server_sockfile):
+            raise RuntimeError("never call this func")
+            return proxtheta.utility.client.get_http_resource(
+                (host, 80), req, server_sockfile)
+
+        respack = self.video_cache_manager.make_http_video_resource(
+            req, http_resource_getter_func, None)
+
+        self.assertEqual(respack.res.status_code, 206)
+        self.assertEqual(
+            respack.res.headers.get("Content-Range"), "bytes 90-109/300")
+
+        data = respack.body_file.read()
+
+        self.assertEqual(data, "a" * 10 + "b" * 10)
+
+        respack.close()
+
     def test_create_response_with_new_localcache(self):
         host = "smile-com42.nicovideo.jp"
         req = httpmes.HTTPRequest(
@@ -391,7 +417,57 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
         data = respack.body_file.read()
 
         self.assertEqual(data, "a" * 100 + "b" * 100)
+        self.assertEqual(respack.res.status_code, 200)
+        self.assertIsNone(respack.res.headers.get("Content-Range", None))
+        respack.close()
 
+    def test_create_response_with_tmp_localcache_with_range(self):
+        host = "smile-com42.nicovideo.jp"
+        req = httpmes.HTTPRequest(
+            ("GET", ("http", host, None, "/smile", "v=10.0", ""), "HTTP/1.1"))
+        req.headers["Host"] = host
+        req.headers["Range"] = "bytes=90-109"
+
+        def http_resource_getter_func(req, server_sockfile):
+            return proxtheta.utility.client.get_http_resource(
+                (host, 80), req, server_sockfile)
+
+        respack = self.video_cache_manager.make_http_video_resource(
+            req, http_resource_getter_func, None)
+
+        self.assertEqual(respack.res.status_code, 206)
+        self.assertEqual(
+            respack.res.headers.get("Content-Range"), "bytes 90-109/200")
+
+        data = respack.body_file.read()
+
+        self.assertEqual(data, "a" * 10 + "b" * 10)
+        respack.close()
+
+    def test_create_response_with_tmp_localcache_with_outofcache_range(self):
+        host = "smile-com42.nicovideo.jp"
+        req = httpmes.HTTPRequest(
+            ("GET", ("http", host, None, "/smile", "v=10.0", ""), "HTTP/1.1"))
+        req.headers["Host"] = host
+
+        # cached size is 100
+        # this range must be directly download from server
+        req.headers["Range"] = "bytes=110-119"
+
+        def http_resource_getter_func(req, server_sockfile):
+            return proxtheta.utility.client.get_http_resource(
+                (host, 80), req, server_sockfile)
+
+        respack = self.video_cache_manager.make_http_video_resource(
+            req, http_resource_getter_func, None)
+
+        self.assertEqual(respack.res.status_code, 206)
+        self.assertEqual(
+            respack.res.headers.get("Content-Range"), "bytes 110-119/200")
+
+        data = respack.body_file.read()
+
+        self.assertEqual(data, "b" * 10)
         respack.close()
 
 

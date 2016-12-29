@@ -5,6 +5,7 @@ import os
 import shutil
 import logging as _logging
 import io
+import time
 
 from ..base import VideoCacheInfo, VideoCacheFile, CacheAlreadyExistsError
 from .. import pathutil
@@ -233,6 +234,7 @@ class TestVideoCacheFile(NicoCacheTestCase):
 
         mtime0 = video_cache.get_mtime()
 
+        time.sleep(0.005)
         video_cache.touch()
 
         mtime1 = video_cache.get_mtime()

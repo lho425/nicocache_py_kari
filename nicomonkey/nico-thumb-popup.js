@@ -11,6 +11,16 @@
 // 著者: LHO425
 // ライセンス: WTFPLv2
 
+
+/*
+ * 基本的に、動画へのリンクにマウスが乗ったらpopupを表示し、
+ * リンクから外れたらpopupを消す、ということを行う。
+ * しかし、jsのDOMにより以下のようなこと
+ *   - リンクにマウスが乗っているときにリンク要素が突然消える
+ *   - マウスが乗っているリンクが、突然別のリンクに変わる
+ * ということを考慮しなくてはいけない。
+ */
+
 window.nicoThumb = {};
 window.nicoThumb.debug = false;
 
@@ -24,16 +34,26 @@ function logger_debug(){
 (function(){
     var nicoURLPattern = new RegExp("//(?!blog)(?:[^.]+.nicovideo.jp/(?:.*?%2F)?(watch|gate|community(?=/co)|mylist|user|channel(?=/ch)|seiga)|nico.ms)(?:/|%2F)((?=[1-9]|sm|nm|so|lv|co|ch|im|sg|mg)[a-z0-9]{2}[0-9]+)");
     document.body.addEventListener("mouseover", function (event){
-        var target = event.target;
-        while (!/^(A|BODY)$/.test(target.tagName)) target = target.parentNode;
-        nicoURLMatch = nicoURLPattern.exec(target.href);
-        if (target.tagName === "A" && nicoURLMatch) {
-            var contentType = (nicoURLMatch[1] || "watch");
-            var contentID = nicoURLMatch[2];
+	var target = event.target;
+	while (!/^(A|BODY)$/.test(target.tagName)) target = target.parentNode;
+	nicoURLMatch = nicoURLPattern.exec(target.href);
+	if (target.tagName === "A" && nicoURLMatch) {
+            if (!target.onmouseover) {
+	        var contentType = (nicoURLMatch[1] || "watch");
+	        var contentID = nicoURLMatch[2];
+	        popThumbOn(contentType, contentID, event);
+	        // 一度popupしたリンク要素はイベント登録。
+	        target.onmouseover = function(event){
+		    popThumbOn(contentType, contentID, event);
+	        };
+	        target.onmouseout = function(){
+		    // これがないと動画を移動した時に右上の投稿者のポップアップが前の投稿者のままになってしまう
+		    target.onmouseover = null;
 
-            popThumbOn(contentType, contentID, event);
-
-        } else {
+		    popThumbOff();
+	        };
+            }
+	} else {
             popThumbOff();
         }
     });
