@@ -255,14 +255,14 @@ def applyVideoCacheTouchCacheMixin(VideoCacheClass):
     class VideoCacheTouchCache(VideoCacheClass):
 
         def _make_http_video_resource_with_comlete_localcache(
-                self, server_sockfile):
+                self, server_sockfile, *args, **kwargs):
             if get_config_bool("global", "touchCache"):
                 logger.debug("touch %s", self.info.make_cache_file_path())
                 self._video_cache_file.touch()
 
             return VideoCacheClass.\
                 _make_http_video_resource_with_comlete_localcache(
-                    self, server_sockfile)
+                    self, server_sockfile, *args, **kwargs)
 
     return VideoCacheTouchCache
 
@@ -318,7 +318,7 @@ def applyVideoCacheAutoSaveAndRemoveMixin(VideoCacheClass):
             def close(self):
                 VideoCacheClass._NicoCachingReader.close(self)
 
-                if (self._left_size == 0 and self._low_cache is not None and
+                if (self._is_cache_completed() and self._low_cache is not None and
                     get_config_bool(
                         "global", "autoRemoveLow")):
                     self._low_cache.remove()
