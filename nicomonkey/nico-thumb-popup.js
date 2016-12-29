@@ -178,7 +178,7 @@ function logger_debug(){
             thumbIframe.height = popupThumbHeight;
             thumbIframe.scrolling = "no";
             thumbIframe.frameborder = "0";
-            thumbIframe.style.zIndex = 10000;
+            thumbIframe.style.zIndex = 1000000;
             thumbIframe.style.position = "absolute";
 
             var host = "ext.nicovideo.jp";
