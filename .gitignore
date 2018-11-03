@@ -3,3 +3,7 @@ config.py
 *~
 *.bak
 tmp/
+
+.python-version
+pyenv/
+venv/
