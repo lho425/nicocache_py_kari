@@ -57,6 +57,13 @@ def handle_one_request(response_server, req, client_file, server_sockfile, info,
 
     logger.debug(
         str(info.client_address) + ": " + "start handling one request")
+
+    if req.method == "CONNECT":
+        client_ssl_file = client_file.ssl_wrap(
+            keyfile="./mitm/server.key", server_side=True)
+        handle_client(response_server, client_ssl_file,
+                      info, always_close_connection)
+        return
     try:
         close_client = (always_close_connection or
                         req.is_connection_close() or
