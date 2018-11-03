@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -
 import logging as _logging
 import socket
+import ssl
 #from . import utility
 
 # 原則close()を呼んだらラップしているfile object もcloseする
@@ -146,6 +147,15 @@ class SocketWrapper(FileWrapper):
             # , so we have to close self._wrapped_socket.
         self._wrapped_socket.close()
 
+    def ssl_wrap(self, *args, **kwargs):
+        """
+        Return ssl version SocketWrapper object.
+        Arguments are as same as the second or later arguments of ssl.wrap_socket()
+        """
+        ssl_wrapped_socket = ssl.wrap_socket(
+            self._wrapped_socket, *args, **kwargs)
+
+        return SocketWrapper(sock=ssl_wrapped_socket, address=self.address)
 
 
 def create_sockfile((host, port)):
