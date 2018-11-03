@@ -114,10 +114,11 @@ class SocketWrapper(FileWrapper):
             address = sock.getpeername()
 
         self.address = common.Address(address)
-        # fixme!!! socket._fileobject and sock._sock are dipending
-        # implimention!
+
+        self._wrapped_socket = sock
+
         FileWrapper.__init__(
-            self, socket._fileobject(sock._sock, "rw", True), close=True)
+            self, sock.makefile(mode="rw"))
 
     def __del__(self):
         if not self._closed:
@@ -136,7 +137,15 @@ class SocketWrapper(FileWrapper):
 
     def close(self):
         self.logger.debug("%s: SocketWrapper.close() called", self.address)
-        return FileWrapper.close(self)
+        try:
+            FileWrapper.close(self)
+        except Exception as e:
+            self.logger.error("FileWrapper.close(self) raised error: %s" % e)
+            # FileWrapper.close(self) == sock.makefile(mode="rw")).close() does not close wrapped socket.
+            # See document of sock.makefile()
+            # , so we have to close self._wrapped_socket.
+        self._wrapped_socket.close()
+
 
 
 def create_sockfile((host, port)):
