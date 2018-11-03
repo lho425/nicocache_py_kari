@@ -8,3 +8,4 @@ _testdir/
 config.conf
 log.old.txt
 log.txt
+mitm/
