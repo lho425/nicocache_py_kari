@@ -157,6 +157,10 @@ class SocketWrapper(FileWrapper):
 
         return SocketWrapper(sock=ssl_wrapped_socket, address=self.address)
 
+    @property
+    def ssl(self):
+        return isinstance(self._wrapped_socket, ssl.SSLSocket)
+
 
 def create_sockfile((host, port)):
     address = (host, port)
