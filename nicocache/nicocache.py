@@ -391,7 +391,7 @@ class NicoCache(object):
         nonproxy_camouflage=Trueのときの挙動が異なる
         後者の場合、GET http://host:8080/ ...はGET / ...となるが、前者だと変更されない
         どちらの場合もhop by hop ヘッダは削除される"""
-
+        ssl = (req.scheme == "https")
         (host, port), req = self._get_http_resource_hook(req,
                                                          nonproxy_camouflage)
 
@@ -399,7 +399,8 @@ class NicoCache(object):
             (host, port),
             req, server_sockfile,
             load_body,
-            nonproxy_camouflage=False)  # 自前で処理するのでnonproxy_camouflageはFalse
+            nonproxy_camouflage=False,  # 自前で処理するのでnonproxy_camouflage はFalse
+            ssl=ssl)
 
     @convert_upstream_error
     def simple_proxy_response_server(self, req, server_sockfile, info):
@@ -626,10 +627,10 @@ def main():
     default_response_servers = [CONNECT_Handler(),
                                 ReqForThisServerHandler(),
                                 NicoCacheAPIHandler(
-                                    video_cache_manager, thumbinfo_server),
-                                LocalURIHandler(),
-                                _nicocache.handle_video_request,
-                                _nicocache.simple_proxy_response_server]
+        video_cache_manager, thumbinfo_server),
+        LocalURIHandler(),
+        _nicocache.handle_video_request,
+        _nicocache.simple_proxy_response_server]
     default_response_filters = [video_info_rewriter]
 
     logger.info("finish initializing")
