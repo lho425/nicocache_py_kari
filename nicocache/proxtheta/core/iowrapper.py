@@ -168,4 +168,4 @@ def create_sockfile((host, port), ssl=False):
     if not ssl:
         return sock_file
     else:
-        sock_file.ssl_wrap()
+        return sock_file.ssl_wrap()
