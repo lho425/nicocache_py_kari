@@ -3,6 +3,7 @@ config.py
 *~
 *.bak
 tmp/
+_testdir/
 
 config.conf
 log.old.txt
