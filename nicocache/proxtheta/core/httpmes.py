@@ -39,6 +39,18 @@ def _parse_status_line(s):
     return words
 
 
+def _parse_host_port(a_str):
+    """
+    "host:port" -> (host, port): (str, int)
+    "host" -> (host, None): (str, None)
+    """
+    splitted = a_str.split(":", 1)
+    if len(splitted) == 1:
+        return splitted[0], None
+    host, port_str = splitted
+    return host, int(port_str)
+
+
 def _parse_uri(uri):
     r = urlparse.urlsplit(uri)
     host = r.hostname
@@ -207,6 +219,17 @@ class HTTPRequest(HTTPMessage):
     @classmethod
     def _parse_start_line(cls, raw_start_line):
         method, uri, http_version = _parse_request_line(raw_start_line)
+        if method.upper() == "CONNECT":
+            host, port = _parse_host_port(uri)
+            return (method, (
+                '',
+                host,
+                port,
+                '',
+                '',
+                ''
+            ), http_version)
+
         uri = _parse_uri(uri)
 
         return (method, (
@@ -296,7 +319,7 @@ def get_transfer_length(mes, hint_req=None):
     Transfer Encoding が chunked のときは CHUNKEDが返り、
     EOFまで読み込む必要があるときは-1が返り、
     不明なときは UNKNOWN が返る。
-     UNKNOWN が返るときは完全にクライアントとサーバ達だけが長さを知っているものとする。
+    UNKNOWN が返るときは完全にクライアントとサーバ達だけが長さを知っているものとする。
 
     hint_reqはmesがHTTP Responseの場合に参考にされる可能性がある
     これは、HEAD メソッドのリクエストに対するレスポンスボディーの長さは0であるというrfc2616の規定に対応するためである。
