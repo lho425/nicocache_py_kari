@@ -15,30 +15,25 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
-import os
+
+import errno
+import importlib
+import locale
 import logging as _logging
 import logging.handlers as _
-import re
-from copy import deepcopy
-import importlib
+import os
 import pkgutil
-import locale
+import re
 import shutil
 import sys
-from libnicocache.base import VideoCacheInfo
-import errno
+from copy import deepcopy
 
-
-if sys.version_info.major == 2:
-    from ConfigParser import RawConfigParser
-else:
-    from configparser import RawConfigParser
-
-
+import libnicocache.pathutil
+import libnicovideo.thumbinfo
 import proxtheta.server
 import proxtheta.utility.client
 import proxtheta.utility.server
-
+from libnicocache.base import VideoCacheInfo
 from proxtheta import core
 from proxtheta.core import httpmes
 from proxtheta.core.common import ResponsePack
@@ -46,12 +41,15 @@ from proxtheta.utility import proxy
 from proxtheta.utility.proxy import convert_upstream_error
 from proxtheta.utility.server import is_request_to_this_server
 
-
-import libnicovideo.thumbinfo
-import libnicocache.pathutil
 from . import rewriter
-from .urlapi import (
-    ReqForThisServerHandler, NicoCacheAPIHandler, LocalURIHandler)
+from .urlapi import (LocalURIHandler, NicoCacheAPIHandler,
+                     ReqForThisServerHandler)
+
+if sys.version_info.major == 2:
+    from ConfigParser import RawConfigParser
+else:
+    from configparser import RawConfigParser
+
 
 logger = _logging.getLogger("nicocache.py")
 # logger.setLevel(_logging.DEBUG)
@@ -144,7 +142,8 @@ class ConfigLoader(object):
             return self._config.getboolean(section, key)
         else:
             return defaults[key]
-#def get_config(key, value_type, default_value=None):
+# def get_config(key, value_type, default_value=None):
+
 
 _config_loader = None
 
@@ -439,6 +438,7 @@ class NicoCache(object):
             # ニコニコ動画の動画ファイルへのアクセスでないとき
             return ResponsePack(None, server_sockfile=server_sockfile)
 
+
 _nicocache = NicoCache()
 
 
@@ -459,6 +459,7 @@ class CONNECT_Handler(proxtheta.utility.server.ResponseServer):
         logger.info("but cannot handle CONNECT(501 Not Implemented)")
         return ResponsePack(httpmes.HTTP11Error((501, "Not Implemented")),
                             server_sockfile=server_sockfile)
+
 
 _http_403forbidden_res = httpmes.HTTPResponse(("HTTP/1.1", 403, "Forbidden"),
                                               body="403 Forbidden")
