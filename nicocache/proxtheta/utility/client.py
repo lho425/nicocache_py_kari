@@ -3,7 +3,7 @@ import logging as _logging
 from copy import deepcopy
 
 
-from ..core import httpmes, common
+from ..core import httpmes, common, utility
 from ..core.iowrapper import create_sockfile
 
 from .debug import get_processing_function_name as func_name
@@ -12,7 +12,50 @@ from proxtheta.utility.common import safe_close
 logger = _logging.getLogger(__name__)
 
 
+def _have_to_connect_sock(host, port, server_sockfile):
+    my_func_name = func_name()
+
+    # Judgeing server_sockfile can be used or not.
+    # if can not use server_sockfile:
+    if server_sockfile is None:
+        logger.debug(
+            my_func_name + "(): server_sockfile is None. Have to create new connection.")
+        return True
+
+    if (host, port) != (server_sockfile.address.host, server_sockfile.address.port):
+        logger.debug(my_func_name + "(): " +
+                     str((host, port)) +
+                     " != " +
+                     str((server_sockfile.address.host, server_sockfile.address.port)) +
+                     " Have to reconnect."
+                     )
+        return True
+
+    logger.debug(my_func_name + "(): " +
+                 str((host, port)) +
+                 " == " +
+                 str((server_sockfile.address.host, server_sockfile.address.port)) +
+                 " server socket cache hit!")
+    return False
+
+
+def _prepare_server_sock(host, port, server_sockfile):
+    my_func_name = func_name()
+
+    if _have_to_connect_sock(host, port, server_sockfile):
+        logger.debug(my_func_name + "(): connecting to " + str((host, port)))
+        utility.close_if_not_None(server_sockfile)
+
+        server_sockfile = create_sockfile((host, port))
+    else:
+        logger.debug(
+            my_func_name + "(): reuse server socket file of " + str((host, port)))
+
+    return server_sockfile
+
 #!!!まだ不完全、もっと充実させる
+
+
 def make_nonproxy_camouflaged_request(req):
     httpmes.remove_hop_by_hop_header(req)
     # discuss!!! according to rfc2616,
@@ -55,46 +98,14 @@ def get_http_resource(
     """
     # fixme!!!server_sockfileが例外安全でない！
 
-    my_func_name = func_name()
-
     if port is None:
         port = 80
-
-    # Judgeing server_sockfile can be used or not.
-    # if can not use server_sockfile:
-    haveto_connect_sock = False
-    if server_sockfile is None:
-        haveto_connect_sock = True
-        logger.debug(
-            my_func_name + "(): server_sockfile is None. Have to create new connection.")
-    elif (host, port) != (server_sockfile.address.host, server_sockfile.address.port):
-        haveto_connect_sock = True
-        logger.debug(my_func_name + "(): " +
-                     str((host, port)) +
-                     " != " +
-                     str((server_sockfile.address.host, server_sockfile.address.port)) +
-                     " Have to reconnect."
-                     )
-        server_sockfile.close()
-    else:
-        logger.debug(my_func_name + "(): " +
-                     str((host, port)) +
-                     " == " +
-                     str((server_sockfile.address.host, server_sockfile.address.port)) +
-                     " server socket cache hit!")
-        haveto_connect_sock = False
-
-    if haveto_connect_sock:
-        logger.debug(my_func_name + "(): connecting to " + str((host, port)))
-
-        server_sockfile = create_sockfile((host, port))
-    else:
-        logger.debug(
-            my_func_name + "(): reuse server socket file of " + str((host, port)))
 
     if nonproxy_camouflage:
         req = make_nonproxy_camouflaged_request(req)
         assert req is not None
+
+    server_sockfile = _prepare_server_sock(host, port, server_sockfile)
 
     res, server_sockfile = get_http_response_with_sockfile(
         req, server_sockfile, load_body)
