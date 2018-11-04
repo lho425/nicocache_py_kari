@@ -3,3 +3,7 @@ config.py
 *~
 *.bak
 tmp/
+
+config.conf
+log.old.txt
+log.txt
