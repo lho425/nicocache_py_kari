@@ -162,6 +162,10 @@ class SocketWrapper(FileWrapper):
         return isinstance(self._wrapped_socket, ssl.SSLSocket)
 
 
-def create_sockfile((host, port)):
+def create_sockfile((host, port), ssl=False):
     address = (host, port)
-    return SocketWrapper(socket.create_connection(address), address)
+    sock_file = SocketWrapper(socket.create_connection(address), address)
+    if not ssl:
+        return sock_file
+    else:
+        sock_file.ssl_wrap()

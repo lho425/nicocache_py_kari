@@ -12,7 +12,7 @@ from proxtheta.utility.common import safe_close
 logger = _logging.getLogger(__name__)
 
 
-def _have_to_connect_sock(host, port, server_sockfile):
+def _have_to_connect_sock(host, port, ssl, server_sockfile):
     my_func_name = func_name()
 
     # Judgeing server_sockfile can be used or not.
@@ -30,6 +30,12 @@ def _have_to_connect_sock(host, port, server_sockfile):
                      " Have to reconnect."
                      )
         return True
+    if ssl != server_sockfile:
+        logger.debug(my_func_name + "(): %s != %s (server_sockfile.ssl), Have to reconnect.",
+                     ssl,
+                     server_sockfile.ssl
+                     )
+        return True
 
     logger.debug(my_func_name + "(): " +
                  str((host, port)) +
@@ -39,14 +45,14 @@ def _have_to_connect_sock(host, port, server_sockfile):
     return False
 
 
-def _prepare_server_sock(host, port, server_sockfile):
+def _prepare_server_sock(host, port, ssl, server_sockfile):
     my_func_name = func_name()
 
-    if _have_to_connect_sock(host, port, server_sockfile):
+    if _have_to_connect_sock(host, port, ssl, server_sockfile):
         logger.debug(my_func_name + "(): connecting to " + str((host, port)))
         utility.close_if_not_None(server_sockfile)
 
-        server_sockfile = create_sockfile((host, port))
+        server_sockfile = create_sockfile((host, port), ssl=ssl)
     else:
         logger.debug(
             my_func_name + "(): reuse server socket file of " + str((host, port)))
@@ -96,6 +102,7 @@ def get_http_resource(
     ResponsePack.res.body will be "", ResponsePack.body_file will be None.
     """
     # fixme!!!server_sockfileが例外安全でない！
+    my_func_name = func_name()
 
     if port is None:
         port = 80
@@ -104,7 +111,10 @@ def get_http_resource(
         req = make_nonproxy_camouflaged_request(req)
         assert req is not None
 
-    server_sockfile = _prepare_server_sock(host, port, server_sockfile)
+    ssl = (req.scheme == "https")
+    logger.debug("%s(): req.scheme=%s, ssl=%s", my_func_name, req.scheme, ssl)
+
+    server_sockfile = _prepare_server_sock(host, port, ssl, server_sockfile)
 
     res, server_sockfile = get_http_response_with_sockfile(
         req, server_sockfile, load_body)
@@ -187,7 +197,8 @@ def get_http_response_with_sockfile(
     if res is None:
 
         safe_close(server_sockfile)
-        server_sockfile = create_sockfile((host, port))
+        server_sockfile = create_sockfile(
+            (host, port), ssl=server_sockfile.ssl)
         res, _ = _do_get_http_response_with_sockfile(
             req, server_sockfile, load_body, raise_io_error=True)
         if res is None:
