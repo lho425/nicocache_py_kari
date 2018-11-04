@@ -108,12 +108,14 @@ def get_http_resource(
     if port is None:
         port = 80
 
+    if ssl is None:
+        ssl = (req.scheme == "https")
+        logger.debug("%s(): req.scheme=%s, ssl=%s",
+                     my_func_name, req.scheme, ssl)
+
     if nonproxy_camouflage:
         req = make_nonproxy_camouflaged_request(req)
         assert req is not None
-
-    ssl = (req.scheme == "https")
-    logger.debug("%s(): req.scheme=%s, ssl=%s", my_func_name, req.scheme, ssl)
 
     server_sockfile = _prepare_server_sock(host, port, ssl, server_sockfile)
 
