@@ -79,7 +79,8 @@ def get_http_resource(
         req,
         server_sockfile=None,
         load_body=False,
-        nonproxy_camouflage=True):
+        nonproxy_camouflage=True,
+        ssl=None):
     """return type: proxtheta.server.ResponsePack
 
     Send req to given (host, port) server and get response.
