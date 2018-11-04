@@ -53,8 +53,6 @@ def _prepare_server_sock(host, port, server_sockfile):
 
     return server_sockfile
 
-#!!!まだ不完全、もっと充実させる
-
 
 def make_nonproxy_camouflaged_request(req):
     httpmes.remove_hop_by_hop_header(req)
@@ -63,6 +61,7 @@ def make_nonproxy_camouflaged_request(req):
     # So, should we contain remove_hop_by_hop_header task to
     # request camouflaging?
 
+    #!!!まだ不完全、もっと充実させる
     req = deepcopy(req)
     httpmes.remove_scheme_and_authority(req)
     return req
@@ -130,6 +129,33 @@ def get_http_resource(
     return common.ResponsePack(res, body_file, server_sockfile)
 
 
+def _do_get_http_response_with_sockfile(req, server_sockfile, load_body, raise_io_error):
+    """
+    return: (res, io_error)
+    """
+    my_func_name = func_name()
+    try:
+        server_sockfile.write(str(req))
+        server_sockfile.flush()
+    except IOError as e:
+
+        logger.debug(my_func_name +
+                     "(): given server_sockfile is broken.")
+        if raise_io_error:
+            raise e
+        else:
+            return None, e
+
+    res = httpmes.HTTPResponse.create(server_sockfile, load_body)
+
+    if res is None:
+        logger.debug(my_func_name + "(): no response from server with " +
+                     req.get_start_line_str())
+        return None, None
+
+    return res, None
+
+
 def get_http_response_with_sockfile(
         req,
         server_sockfile,
@@ -142,35 +168,28 @@ def get_http_response_with_sockfile(
     if write or read error occurred, reconnect to server_sockfile.address and retry once.
     this is low level function. you had better use get_http_resource().
     """
-    # fixme!!!server_sockfileが例外安全でない！
     my_func_name = func_name()
     (host, port) = (server_sockfile.address.host, server_sockfile.address.port)
-    try:
-        server_sockfile.write(str(req))
-        server_sockfile.flush()
-    except IOError:
 
+    res, io_error = _do_get_http_response_with_sockfile(
+        req, server_sockfile, load_body, raise_io_error=False)
+
+    # reporting error to logger.debug
+    if io_error is not None:
         logger.debug(my_func_name +
                      "(): given server_sockfile is broken. connecting to " +
                      str((host, port)))
-        safe_close(server_sockfile)
-        server_sockfile = create_sockfile((host, port))
-
-        server_sockfile.write(str(req))
-        server_sockfile.flush()
-
-    res = httpmes.HTTPResponse.create(server_sockfile, load_body)
-
-    if res is None:
+    elif res is None:
         logger.debug(my_func_name + "(): no response from server with " +
                      req.get_start_line_str())
         logger.debug("retry Communicating.")
 
+    if res is None:
+
         safe_close(server_sockfile)
         server_sockfile = create_sockfile((host, port))
-        server_sockfile.write(str(req))
-        server_sockfile.flush()
-        res = httpmes.HTTPResponse.create(server_sockfile, load_body)
+        res, _ = _do_get_http_response_with_sockfile(
+            req, server_sockfile, load_body, raise_io_error=True)
         if res is None:
             server_sockfile.close()
             raise EmptyResponseError((host, port), str(req))
