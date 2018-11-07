@@ -105,13 +105,15 @@ def get_http_resource(
     # fixme!!!server_sockfileが例外安全でない！
     my_func_name = func_name()
 
-    if port is None:
-        port = 80
-
     if ssl is None:
         ssl = (req.scheme == "https")
         logger.debug("%s(): req.scheme=%s, ssl=%s",
                      my_func_name, req.scheme, ssl)
+    if port is None:
+        if ssl:
+            port = 443
+        else:
+            port = 80
 
     if nonproxy_camouflage:
         req = make_nonproxy_camouflaged_request(req)

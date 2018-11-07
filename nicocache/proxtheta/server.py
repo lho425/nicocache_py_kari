@@ -204,6 +204,8 @@ def handle_client(response_server, client_file, info, always_close_connection=Fa
                 if connect_host_port is not None:
                     req.host, req.port = connect_host_port
                     req.scheme = "https"
+                    if req.port == 443:
+                        req.port = None
                 logger.debug("client request http: %s", req)
                 logger.debug("client request dest: %s:%s", req.host, req.port)
             except httpmes.ParseError as e:
