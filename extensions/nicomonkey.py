@@ -76,6 +76,8 @@ class UserScript(object):
         if header_dict is None:
             raise NotUserScriptError(user_script_path)
 
+        logger.debug("greasemonkey header: %s", header_dict)
+
         for key in ("name", "description", "namespace", "version"):
             value = header_dict.get(key, [""])[-1]
             setattr(self, key, value)
@@ -88,7 +90,9 @@ class UserScript(object):
         match = False
 
         for include in self.include:
+            logger.debug("url: %s; include: %s", url, include)
             if fnmatch.fnmatch(url, include):
+                logger.debug("matched, url: %s; include: %s", url, include)
                 match = True
 
         for exclude in self.exclude:
