@@ -1,6 +1,7 @@
 // ==UserScript==
 // @name nico-thumb-popup
 // @include http://www.nicovideo.jp/*
+// @include https://www.nicovideo.jp/*
 // ==/UserScript==
 
 // 著者: 【ニコニコ】自動ローカル保存プロクシ NicoCache20 >>32氏 (http://anago.open2ch.net/test/read.cgi/software/1426235895/32)
@@ -128,20 +129,22 @@ function logger_debug(){
 	    if(contentType == "watch"){
 		if(contentID.startsWith("lv")){
 		    host = "live.nicovideo.jp";
-		    thumbIframePath = "/embed/" + contentID;
+		    thumbIframePath = "embed/" + contentID;
 		}else{
-		    thumbIframePath = "/thumb/" + contentID;
+		    thumbIframePath = "thumb/" + contentID;
 		}
 	    }else if(/^(mylist|user|community|channel)$/.test(contentType)){
-		thumbIframePath = "/thumb_" + contentType + "/" + contentID;
+		thumbIframePath = "thumb_" + contentType + "/" + contentID;
 	    }else if(contentType == "seiga"){
 		host = "ext.seiga.nicovideo.jp";
-		thumbIframePath = "/thumb/" + contentID;
+		thumbIframePath = "thumb/" + contentID;
 	    }else{
 		console.log("nico-thumb-popup: unknown content:", contentType + "/" + contentID);
-		thumbIframePath = "/thumb/" + contentID;
-	    }
-	    thumbIframe.src = "http://" + host + "/" + thumbIframePath;
+		thumbIframePath = "thumb/" + contentID;
+		}
+		// protocol is "http:" or "https:"
+		protocol = window.location.protocol
+	    thumbIframe.src =  protocol + "//" + host + "/" + thumbIframePath;
 	    nicoThumb.appendChild(thumbIframe);
 	    nicoThumbTable[path] = thumbIframe;	
 	}
