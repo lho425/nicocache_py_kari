@@ -196,7 +196,7 @@ class SocketWrapperMock(iowrapper.FileWrapper):
         return iowrapper.FileWrapper.readline(self, size=size)
 
 
-def create_sockfile((host, port)):
+def create_sockfile((host, port), ssl=None):
     """モックを返す"""
     return SocketWrapperMock((host, port))
 
@@ -508,6 +508,7 @@ class TestVideoCacheManager(NicoCacheTestCase):
 
         for video_cache in video_cache_list:
             self.assertEqual(video_cache.info.video_id, "so20")
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=verbosity)
