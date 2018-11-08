@@ -158,6 +158,8 @@ class SocketWrapper(FileWrapper):
         ssl_wrapped_socket = ssl.wrap_socket(
             self._wrapped_socket, *args, **kwargs)
 
+        self._closed = True
+
         return SocketWrapper(sock=ssl_wrapped_socket, address=self.address)
 
     @property
