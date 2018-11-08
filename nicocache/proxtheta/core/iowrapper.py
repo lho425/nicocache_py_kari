@@ -120,14 +120,16 @@ class SocketWrapper(FileWrapper):
 
         FileWrapper.__init__(
             self, sock.makefile(mode="rw"))
+        self.logger.debug("SocketWrapper created, %s, %s",
+                          self.address, object.__repr__(self))
 
     def __del__(self):
         if not self._closed:
             try:
                 self.logger.error(
                     "SocketWrapper was closed by GC! Resource leaking!")
-                self.logger.error(
-                    self.__class__.__name__ + ", " + str(self.address))
+                self.logger.error("%s, %s, %s",
+                                  self.__class__.__name__, str(self.address), object.__repr__(self))
             except:
                 pass
 
@@ -137,7 +139,8 @@ class SocketWrapper(FileWrapper):
                 pass
 
     def close(self):
-        self.logger.debug("%s: SocketWrapper.close() called", self.address)
+        self.logger.debug("%s: SocketWrapper.close() called, %s",
+                          self.address, object.__repr__(self))
         try:
             FileWrapper.close(self)
         except Exception as e:
