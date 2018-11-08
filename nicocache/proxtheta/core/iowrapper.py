@@ -159,6 +159,8 @@ class SocketWrapper(FileWrapper):
             self._wrapped_socket, *args, **kwargs)
 
         self._closed = True
+        self.logger.debug("SocketWrapper delegated to ssl wrapper, %s, %s",
+                          self.address, object.__repr__(self))
 
         return SocketWrapper(sock=ssl_wrapped_socket, address=self.address)
 
