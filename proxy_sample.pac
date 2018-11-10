@@ -6,8 +6,7 @@ nicocache_host = "127.0.0.1"; //NAS等で動かす人はここも書き換えて
 proxy_str = "PROXY " + nicocache_host + ":" + nicocache_port;
 
 function FindProxyForURL(url, host){
-    if(shExpMatch(host, "*nicovideo.jp") &&
-       url.startsWith("http:")){ // https等を弾く
+    if(shExpMatch(host, "*nicovideo.jp")) {
         return proxy_str;
     }
 
