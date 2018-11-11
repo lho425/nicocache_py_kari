@@ -20,14 +20,20 @@ nicocache_nlの代わりを目指して作られています。
 そんなんで、じゃあどうせなら自分用にNicoCacheモドキつくるかーと思って作ったのを公開しただけです。こんなものを無理して使う必要など全くないのです！
 もちろん使ってくれてバグ報告とかしていただければ嬉しいですが。
 
-#NicoCache_Py(仮)を動かすのに必要なもの
+# 準備: NicoCache_Py(仮)を動かすのに必要なもの
 
+## unix系
+bash と git が必要です。
+./prepare_pyenv.sh を実行すると、nicocache用のpython環境を用意します。
+以降、NicoCache_Py.sh を実行すると NicoCache_Py(仮) が動作します。
+
+## windows
 python2.7が必要です。
 https://www.python.org/downloads/ にあります。
 windowsの人は "C:\Python27" にpythonをインストールしてください。
 それが嫌な人は、適宜NicoCache_Py.batを書き換えてください。(詳しい方はpathを追加して云々しても良いでしょう)
 
-
+pythonをインストールしたら以降、NicoCache_Py.bat を実行すると NicoCache_Py(仮) が動作します。
 
 
 #設定
