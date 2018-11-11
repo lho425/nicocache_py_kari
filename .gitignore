@@ -13,3 +13,4 @@ mitm/
 .python-version
 pyenv/
 venv/
+dependency/
