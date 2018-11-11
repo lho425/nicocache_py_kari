@@ -11,6 +11,3 @@ pyenv shell 2.7.10
 
 python -V
 which python
-
-mkdir dependency
-pip install -r requirements.txt --target dependency
