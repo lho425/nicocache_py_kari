@@ -35,7 +35,10 @@ windowsの人は "C:\Python27" にpythonをインストールしてください�
 初回起動時に生成されるconfig.confを編集すると、設定が変えられます。
 詳しくはconfig.confに書いてあることを読んでください。
 
+# https 通信のプロクシのためのセットアップ (unix系のみ対応)
+./gen-ssl-mitm-keys.sh を実行し、作成されたssl証明書 mitm/server.crt をあなたのOSにインストールします。
 
+windowsも対応予定。
 
 #コマンドAPI
     http://www.nicovideo.jp/watch/smXXXX/save
