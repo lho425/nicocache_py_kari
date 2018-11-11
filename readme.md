@@ -24,7 +24,7 @@ nicocache_nlの代わりを目指して作られています。
 
 ### unix系
 bash と git が必要です。
-./prepare_pyenv.sh を実行すると、nicocache用のpython環境を用意します。
+./setup.sh を実行すると、nicocache用のpython環境と依存ライブラリを用意します。
 以降、NicoCache_Py.sh を実行すると NicoCache_Py(仮) が動作します。
 
 ### windows
