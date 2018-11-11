@@ -23,10 +23,19 @@ nicocache_nlの代わりを目指して作られています。
 ## 準備: NicoCache_Py(仮)を動かすのに必要なもの
 
 ### unix系
-bash と git と Cコンパイラが必要です。git と Cコンパイラはなくても構いませんが、その場合aptやbrewでpython2.7を自分でインストールしてください。
+bash と git と Cコンパイラが必要です。git と Cコンパイラはなくても構いませんが、その場合aptやbrewでpython2.7+pip2を自分でインストールしてください。
 #### python環境の用意
 git と Cコンパイラがある場合は`./setup_python.sh`を実行してください。
-git と Cコンパイラがない場合もしくは`./setup_python.sh`が失敗した場合はaptやbrewでpython2.7を自分でインストールしてください。
+git と Cコンパイラがない場合もしくは`./setup_python.sh`が失敗した場合はaptやbrewでpython2.7+pip2を自分でインストールしてください。
+
+ubuntu系なら
+```sh
+sudo apt install python
+sudo apt install python-pip
+pip install --upgrade pip
+```
+みたいにやってください。
+
 #### 依存するライブラリの用意
 `./setup_dependency.sh`を実行してください。
 
