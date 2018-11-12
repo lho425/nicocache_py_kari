@@ -8,6 +8,7 @@ _testdir/
 config.conf
 log.old.txt
 log.txt
+cache/
 mitm/
 
 .python-version
