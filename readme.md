@@ -42,12 +42,16 @@ pip install --upgrade pip
 以降、NicoCache_Py.sh を実行すると NicoCache_Py(仮) が動作します。
 
 ### windows
+#### python環境の用意
 python2.7が必要です。
 https://www.python.org/downloads/ にあります。
 windowsの人は "C:\Python27" にpythonをインストールしてください。
-それが嫌な人は、適宜NicoCache_Py.batを書き換えてください。(詳しい方はpathを追加して云々しても良いでしょう)
+それが嫌な人は、適宜`*.bat`を書き換えてください。
 
-pythonをインストールしたら以降、NicoCache_Py.bat を実行すると NicoCache_Py(仮) が動作します。
+#### 依存するライブラリの用意
+`./setup_dependency.bat`を実行してください。
+
+以降、NicoCache_Py.bat を実行すると NicoCache_Py(仮) が動作します。
 
 
 ## 設定
