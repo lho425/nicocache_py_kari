@@ -3,3 +3,15 @@ config.py
 *~
 *.bak
 tmp/
+_testdir/
+
+config.conf
+log.old.txt
+log.txt
+cache/
+mitm/
+
+.python-version
+pyenv/
+venv/
+dependency/

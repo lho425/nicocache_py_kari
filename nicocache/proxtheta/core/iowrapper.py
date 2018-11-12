@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -
 import logging as _logging
 import socket
+import ssl
 #from . import utility
 
 # 原則close()を呼んだらラップしているfile object もcloseする
@@ -114,18 +115,21 @@ class SocketWrapper(FileWrapper):
             address = sock.getpeername()
 
         self.address = common.Address(address)
-        # fixme!!! socket._fileobject and sock._sock are dipending
-        # implimention!
+
+        self._wrapped_socket = sock
+
         FileWrapper.__init__(
-            self, socket._fileobject(sock._sock, "rw", True), close=True)
+            self, sock.makefile(mode="rw"))
+        self.logger.debug("SocketWrapper created, %s, %s",
+                          self.address, object.__repr__(self))
 
     def __del__(self):
         if not self._closed:
             try:
                 self.logger.error(
                     "SocketWrapper was closed by GC! Resource leaking!")
-                self.logger.error(
-                    self.__class__.__name__ + ", " + str(self.address))
+                self.logger.error("%s, %s, %s",
+                                  self.__class__.__name__, str(self.address), object.__repr__(self))
             except:
                 pass
 
@@ -135,10 +139,40 @@ class SocketWrapper(FileWrapper):
                 pass
 
     def close(self):
-        self.logger.debug("%s: SocketWrapper.close() called", self.address)
-        return FileWrapper.close(self)
+        self.logger.debug("%s: SocketWrapper.close() called, %s",
+                          self.address, object.__repr__(self))
+        try:
+            FileWrapper.close(self)
+        except Exception as e:
+            self.logger.error("FileWrapper.close(self) raised error: %s" % e)
+            # FileWrapper.close(self) == sock.makefile(mode="rw")).close() does not close wrapped socket.
+            # See document of sock.makefile()
+            # , so we have to close self._wrapped_socket.
+        self._wrapped_socket.close()
+
+    def ssl_wrap(self, *args, **kwargs):
+        """
+        Return ssl version SocketWrapper object.
+        Arguments are as same as the second or later arguments of ssl.wrap_socket()
+        """
+        ssl_wrapped_socket = ssl.wrap_socket(
+            self._wrapped_socket, *args, **kwargs)
+
+        self._closed = True
+        self.logger.debug("SocketWrapper delegated to ssl wrapper, %s, %s",
+                          self.address, object.__repr__(self))
+
+        return SocketWrapper(sock=ssl_wrapped_socket, address=self.address)
+
+    @property
+    def ssl(self):
+        return isinstance(self._wrapped_socket, ssl.SSLSocket)
 
 
-def create_sockfile((host, port)):
+def create_sockfile((host, port), ssl=False):
     address = (host, port)
-    return SocketWrapper(socket.create_connection(address), address)
+    sock_file = SocketWrapper(socket.create_connection(address), address)
+    if not ssl:
+        return sock_file
+    else:
+        return sock_file.ssl_wrap()

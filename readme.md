@@ -1,6 +1,6 @@
-#NicoCache_Py(仮)
+# NicoCache_Py(仮)
 
-#これは何？
+## これは何？
 
 これは、ニコニコ動画の動画をキャッシュしたりするソフトです。
 nicocache_nlの代わりを目指して作られています。
@@ -10,7 +10,7 @@ nicocache_nlの代わりを目指して作られています。
 
 ライセンスはGPLv3です。
 
-#なぜNicoCache_nl+modの再発明が必要？
+### なぜNicoCache_nl+modの再発明が必要？
 
 そもそもそんな必要はないです。
  - 自分用に汎用的に使えるプロクシサーバが欲しかったのでついでに作った
@@ -20,24 +20,51 @@ nicocache_nlの代わりを目指して作られています。
 そんなんで、じゃあどうせなら自分用にNicoCacheモドキつくるかーと思って作ったのを公開しただけです。こんなものを無理して使う必要など全くないのです！
 もちろん使ってくれてバグ報告とかしていただければ嬉しいですが。
 
-#NicoCache_Py(仮)を動かすのに必要なもの
+## 準備: NicoCache_Py(仮)を動かすのに必要なもの
 
+### unix系
+bash と git と Cコンパイラが必要です。git と Cコンパイラはなくても構いませんが、その場合aptやbrewでpython2.7+pip2を自分でインストールしてください。
+#### python環境の用意
+git と Cコンパイラがある場合は`./setup_python.sh`を実行してください。
+git と Cコンパイラがない場合もしくは`./setup_python.sh`が失敗した場合はaptやbrewでpython2.7+pip2を自分でインストールしてください。
+
+ubuntu系なら
+```sh
+sudo apt install python
+sudo apt install python-pip
+pip install --upgrade pip
+```
+みたいにやってください。
+
+#### 依存するライブラリの用意
+`./setup_dependency.sh`を実行してください。
+
+以降、NicoCache_Py.sh を実行すると NicoCache_Py(仮) が動作します。
+
+### windows
+#### python環境の用意
 python2.7が必要です。
 https://www.python.org/downloads/ にあります。
 windowsの人は "C:\Python27" にpythonをインストールしてください。
-それが嫌な人は、適宜NicoCache_Py.batを書き換えてください。(詳しい方はpathを追加して云々しても良いでしょう)
+それが嫌な人は、適宜`*.bat`を書き換えてください。
+
+#### 依存するライブラリの用意
+`./setup_dependency.bat`を実行してください。
+
+以降、NicoCache_Py.bat を実行すると NicoCache_Py(仮) が動作します。
 
 
-
-
-#設定
+## 設定
 
 初回起動時に生成されるconfig.confを編集すると、設定が変えられます。
 詳しくはconfig.confに書いてあることを読んでください。
 
+## https 通信のプロクシのためのセットアップ (unix系のみ対応)
+./gen-ssl-mitm-keys.sh を実行し、作成されたssl証明書 mitm/server.crt をあなたのOSにインストールします。
 
+windowsも対応予定。
 
-#コマンドAPI
+## コマンドAPI
     http://www.nicovideo.jp/watch/smXXXX/save
 にアクセスすると、cache直下にあるsmXXXXのキャッシュ動画ファイルがcache/saveに移動され、ファイル名にタイトルと拡張子がつきます。
 
@@ -59,7 +86,7 @@ windowsは使用中のファイルに対する操作が行えないので、キ�
 
 
 
-# ログ
+## ログ
 
 引数に debug という文字を渡すと詳細なログを出力します。
 
@@ -70,7 +97,7 @@ log.txtにコンソールに表示されるのと同じログが残ります。�
 log.txtが1GBを超えるとlog.txt.1という名前に変更され、新しくlog.txtができます。log.txt.1は次回起動時に削除されます。
 
 
-#以下開発者向け
+## 以下開発者向け
 初版から内部アーキテクチャが二転三転しながら、なんとか今のアーキテクチャに落ち着きました。自分が考える上で一番マシな設計になったと思います。
 
 ニコニコに関係ない部分はnicocache/proxthetaディレクトリに分離されています。

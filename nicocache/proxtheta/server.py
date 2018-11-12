@@ -57,6 +57,17 @@ def handle_one_request(response_server, req, client_file, server_sockfile, info,
 
     logger.debug(
         str(info.client_address) + ": " + "start handling one request")
+
+    if req.method == "CONNECT":
+        logger.debug("client connect request http: %s", req)
+        logger.debug("client connect request dest: %s:%s", req.host, req.port)
+        client_file.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+        client_file.flush()
+        client_ssl_file = client_file.ssl_wrap(
+            keyfile="./mitm/server.key", certfile="./mitm/server.crt", server_side=True)
+        handle_client(response_server, client_ssl_file,
+                      info, always_close_connection, connect_host_port=(req.host, req.port))
+        return
     try:
         close_client = (always_close_connection or
                         req.is_connection_close() or
@@ -170,7 +181,10 @@ response header is:
         return None
 
 
-def handle_client(response_server, client_file, info, always_close_connection=False):
+def handle_client(response_server, client_file, info, always_close_connection=False, connect_host_port=None):
+    """
+    connect_host_port: None | (host, port): (str, int)
+    """
 
     logger.debug("client " + str(info.client_address) + " connected")
 
@@ -187,6 +201,13 @@ def handle_client(response_server, client_file, info, always_close_connection=Fa
                     logger.debug("client " + str(info.client_address) + " EOF")
                     client_file.close()
                     return
+                if connect_host_port is not None:
+                    req.host, req.port = connect_host_port
+                    req.scheme = "https"
+                    if req.port == 443:
+                        req.port = None
+                logger.debug("client request http: %s", req)
+                logger.debug("client request dest: %s:%s", req.host, req.port)
             except httpmes.ParseError as e:
                 logger.warning(
                     "bad req" + " `" + str(e) + "'" + " from " + str(info.client_address))
