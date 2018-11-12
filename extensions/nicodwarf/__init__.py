@@ -22,7 +22,7 @@ _certfile_path = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
 _video_cache_manager = None
 
-default_config = {"passwordFile": None}
+default_config = {"passwordFile": None, "debug": False}
 
 logger = _logging.getLogger(__name__)
 
@@ -273,8 +273,13 @@ def fetch_all_saved_video():
 def main_loop():
 
     fetch_time = datetime.time(hour=2, minute=1)
-
-    if 2 <= datetime.datetime.now().hour <= 6:
+    debug_mode = nicocache.get_config(
+        "nicodwarf", "debug", default_config)
+    if debug_mode:
+        # デバッグモードなら、１秒後にfetchを開始する
+        logger.info("debug mode. Nico dwarf will wake up soon.")
+        seconds_to_next_fetch_time = 1
+    elif 2 <= datetime.datetime.now().hour <= 6:
         # 初回(プラグインロード時)が夜中なら、１秒後にfetchを開始する
         logger.info("it's midnight. Nico dwarf will wake up soon.")
         seconds_to_next_fetch_time = 1
@@ -311,6 +316,7 @@ def check_passwd_file_format(passwd):
         logger.exception()
 
     return False
+
 
 pwfilename = nicocache.get_config(
     "nicodwarf", "passwordFile", default_config)
