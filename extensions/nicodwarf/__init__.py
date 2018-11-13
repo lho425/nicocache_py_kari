@@ -198,8 +198,10 @@ def fetch_all_saved_video():
 
             get_nicohistory(video_id, requests_session)
 
-            res = requests_session.get(url=video_url, proxies={
-                "http": "http://localhost:%s" % nicocache_port}, stream=True)
+            proxies = {
+                "http": "http://localhost:%s" % nicocache_port}
+            res = requests_session.get(
+                url=video_url, proxies=proxies, stream=True)
 
             if not res.ok:
                 logger.error("access to nicovideo was denied: \n%s", res)
@@ -210,8 +212,8 @@ def fetch_all_saved_video():
                 if not data:
                     break
 
-            http11_get("http://www.nicovideo.jp/watch/%s/save" %
-                       video_id, proxy=("localhost", nicocache_port))
+            requests_session.get("http://www.nicovideo.jp/watch/%s/save" %
+                                 video_id, proxies=proxies)
 
         except:
             logger.exception(
