@@ -217,9 +217,6 @@ def fetch_all_saved_video():
             logger.exception(
                 "exception raised. skip %s.", video_cache.info.video_id)
 
-        # サーバに負荷をかけ過ぎないようにするため、間隔をあける
-        time.sleep(30)
-
     logger.info("dwarf: finish fetching.")
 
 
