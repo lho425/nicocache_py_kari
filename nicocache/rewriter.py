@@ -132,4 +132,15 @@ class NicoCacheGinzaRewriter(NicoCacheRewriterMixin,
 
         return watch_api_data_dict, flvinfo_dict
 
+
 Rewriter = NicoCacheGinzaRewriter
+
+
+class NicoCacheHtml5PlayerRewriter(NicoCacheRewriterMixin,
+                                   videoinforewriter.Html5PlayerRewriter):
+    def _rewrite_main(self, data):
+        # print(data)
+        return data
+
+
+Rewriter = NicoCacheHtml5PlayerRewriter
