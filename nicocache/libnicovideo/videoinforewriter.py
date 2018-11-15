@@ -156,6 +156,8 @@ class GinzaRewriter(RewriterAbstructBase):
             return content
 
     def _rewrite_main(self, req, watch_api_data_dict, flvinfo_dict):
-        """!!!ドキュメントは後で書きます"""
+        """このメソッドをオーバーライドして
+        req, watch_api_data_dict, flvinfo_dict
+        の書き換えを実際に行う"""
 
         return req, watch_api_data_dict, flvinfo_dict
