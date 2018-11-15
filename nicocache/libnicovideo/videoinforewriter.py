@@ -50,7 +50,7 @@ class RewriterAbstructBase(ResponseFilter):
         pass
 
     def _rewrite(self, content, req, res):
-        """実装しろ(書き換えたcontentをbytes型で返せ、_rewrite_implを呼べ)"""
+        """実装しろ(書き換えたcontentをbytes型で返せ、_rewrite_mainを呼べ)"""
         pass
 
     def _rewrite_main(self, *args):
