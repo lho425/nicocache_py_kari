@@ -199,7 +199,7 @@ class Html5PlayerRewriter(RewriterAbstructBase):
 
             # pprint(data_api_data_dict)
 
-            data_api_data_dict = self._rewrite_main(data_api_data_dict)
+            data_api_data_dict = self._rewrite_main(req, data_api_data_dict)
 
             data_api_data = json.dumps(data_api_data_dict)
 
@@ -222,7 +222,7 @@ class Html5PlayerRewriter(RewriterAbstructBase):
             logger.exception("error occurred, fallback.\n%s", e)
             return content
 
-    def _rewrite_main(self, data_api_data_dict):
+    def _rewrite_main(self, req, data_api_data_dict):
         """このメソッドをオーバーライドして
         data_api_data_dict
         の書き換えを実際に行う"""
