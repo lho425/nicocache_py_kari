@@ -3,6 +3,7 @@ import logging as _logging
 # todo!!!py2かpy3でimportを分岐
 from urlparse import parse_qs
 
+from pprint import pprint
 from .libnicovideo import videoinforewriter
 
 
@@ -138,8 +139,8 @@ Rewriter = NicoCacheGinzaRewriter
 
 class NicoCacheHtml5PlayerRewriter(NicoCacheRewriterMixin,
                                    videoinforewriter.Html5PlayerRewriter):
-    def _rewrite_main(self, data):
-        # print(data)
+    def _rewrite_main(self, req, data):
+        pprint(data)
         return data
 
 
