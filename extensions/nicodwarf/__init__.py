@@ -24,7 +24,7 @@ _certfile_path = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
 _video_cache_manager = None
 
-default_config = {"passwordFile": None, "debug": False}
+default_config = {"passwordFile": None, "enable": True, "debug": False}
 
 logger = _logging.getLogger(__name__)
 
@@ -220,7 +220,7 @@ def main_loop():
         seconds_to_next_fetch_time = get_seconds_to_next_fetch_time(fetch_time)
 
 
-def check_passwd_file_format(passwd):
+def check_passwd_file_format(pwfilename):
     try:
         with open(pwfilename) as passwd:
             username = passwd.readline().rstrip("\r\n")
@@ -228,34 +228,45 @@ def check_passwd_file_format(passwd):
 
             return username and password
     except:
-        logger.exception()
+        logger.exception("check_passwd_file_format error")
 
     return False
 
 
-pwfilename = nicocache.get_config(
-    "nicodwarf", "passwordFile", default_config)
+def enable_nicodwarf():
+    if not nicocache.get_config_bool(
+            "nicodwarf", "enable", default_config):
+        return False
 
-if not pwfilename:
-    logger.error(
-        u"'passwordFile' オプションが configファイルの[nicodwarf] セクションにありません。")
-    logger.error(
-        u"nicodwarf が動作するために'passwordFile' オプションを設定し、 "
-        u"nicocache を再起動してください.")
+    pwfilename = nicocache.get_config(
+        "nicodwarf", "passwordFile", default_config)
 
-elif not os.path.exists(pwfilename):
-    logger.error(
-        u"passwordFile '%s' が存在しません.", pwfilename)
-    logger.error(
-        u"nicodwarf が動作するために '%s' を作成し、 "
-        u"nicocache を再起動してください.", pwfilename)
+    if not pwfilename:
+        logger.error(
+            u"'passwordFile' オプションが configファイルの[nicodwarf] セクションにありません。")
+        logger.error(
+            u"nicodwarf が動作するために'passwordFile' オプションを設定し、 "
+            u"nicocache を再起動してください.")
+        return False
 
-elif not check_passwd_file_format(pwfilename):
-    logger.error(u"'%s' は不正な passwordFileです。", pwfilename)
-    logger.error(u"1行目にニコニコ動画に登録したメールアドレス、\n"
-                 u"2行目にニコニコ動画のパスワードをかいてください。")
+    elif not os.path.exists(pwfilename):
+        logger.error(
+            u"passwordFile '%s' が存在しません.", pwfilename)
+        logger.error(
+            u"nicodwarf が動作するために '%s' を作成し、 "
+            u"nicocache を再起動してください.", pwfilename)
+        return False
 
-else:
+    elif not check_passwd_file_format(pwfilename):
+        logger.error(u"'%s' は不正な passwordFileです。", pwfilename)
+        logger.error(u"1行目にニコニコ動画に登録したメールアドレス、\n"
+                     u"2行目にニコニコ動画のパスワードをかいてください。")
+        return False
+
+    return True
+
+
+if enable_nicodwarf():
     def get_extension():
 
         extension = Extension(u"nicodwarf(fetcher相当)")
@@ -265,5 +276,3 @@ else:
         fethcer_thread.start()
 
         return extension
-
-del pwfilename
