@@ -57,7 +57,7 @@ def login_to_niconico(requests_session):
     return requests_session
 
 
-def get_nicohistory(video_id, requests_session):
+def access_watchpage_with_session(video_id, requests_session):
     """video_idはsm...かスレッドid
     自動でリダイレクトはしない
     余計なcookieも入る"""
@@ -159,7 +159,7 @@ def fetch_all_saved_video():
                 else:
                     logger.info("debug mode, fetch economy cache")
 
-            get_nicohistory(video_id, requests_session)
+            access_watchpage_with_session(video_id, requests_session)
 
             proxies = {
                 "http": "http://localhost:%s" % nicocache_port}
