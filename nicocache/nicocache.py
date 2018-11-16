@@ -152,7 +152,7 @@ _default_global_config = {
     "proxyHost": "",
     "proxyPort": 8080,
     "touchCache": True,
-    "cacheFolder": "",  # デフォルトは./cacheだが、それはこの項目を参照するときに""かどうかで判断する
+    "cacheFolder": "",  # デフォルトは./cacheだが、""だった場合_init_config()内で "cache" に初期化する
     "autoSave": True,
     "autoRemoveLow": True,
 
@@ -180,8 +180,12 @@ def _init_config():
     _static_global_config["listenPort"] = _config_loader.get_config_int(
         "global", "listenPort", _default_global_config)
 
-    _static_global_config["cacheFolder"] = _config_loader.get_config(
+    cache_folder = _config_loader.get_config(
         "global", "cacheFolder", _default_global_config)
+
+    if cache_folder == "":
+        cache_folder = "cache"
+    _static_global_config["cacheFolder"] = cache_folder
 
 
 def _get_config(type_string, section, key, defaults={}):
@@ -599,7 +603,7 @@ def main():
     nonproxy_camouflage = True
 
     cache_dir_path = get_config(
-        "global", "cacheFolder") or "./cache"
+        "global", "cacheFolder")
 
     if not os.path.isdir(cache_dir_path):
         os.makedirs(cache_dir_path)
