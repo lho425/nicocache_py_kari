@@ -10,6 +10,8 @@ import urllib
 import re
 import logging as _logging
 
+import requests
+
 import nicocache
 from nicocache import Extension
 from proxtheta.utility import proxy
@@ -22,7 +24,7 @@ _certfile_path = os.path.join(os.path.dirname(__file__), "cacert.pem")
 
 _video_cache_manager = None
 
-default_config = {"passwordFile": None}
+default_config = {"passwordFile": None, "debug": False}
 
 logger = _logging.getLogger(__name__)
 
@@ -39,119 +41,40 @@ class NicoNicoLoginError(Exception):
     pass
 
 
-def http11_get(url, headers=None,
-               load_body=True, raise_on_error=True, proxy=()):
-
-    req = httpmes.HTTPRequest.create("GET %s HTTP/1.1\r\n\r\n" % str(url))
-
-    req.headers["Host"] = req.host
-    if proxy:
-        host, port = proxy
-    else:
-        host, port = req.host, req.port
-        req.scheme = ""
-        req.host = ""
-        req.port = None
-        port = port or 80
-
-    req.headers["Connection"] = "close"
-    if headers:
-        for k, v in headers.iteritems():
-            req.headers[k] = v
-
-    sock = iowrapper.create_sockfile((host, port))
-
-    sock.write(str(req))
-
-    res = httpmes.HTTPResponse.create(sock, load_body)
-
-    if raise_on_error and (400 <= res.status_code <= 599):
-        sock.close()
-        raise HTTPResponseError(res)
-
-    if load_body:
-        sock.close()
-        return res
-
-    return res, sock
-
-
-def login_to_niconico():
+def login_to_niconico(requests_session):
     pwfilename = nicocache.get_config(
         "nicodwarf", "passwordFile", default_config)
     with open(pwfilename) as passwd:
         username = passwd.readline().rstrip("\r\n")
         password = passwd.readline().rstrip("\r\n")
 
-    req_str = """\
-POST /secure/login?site=niconico HTTP/1.1
-Host: secure.nicovideo.jp
-Connection: close
-Content-Type: application/x-www-form-urlencoded
-"""
+    res = requests_session.post(url="https://secure.nicovideo.jp/secure/login?site=niconico",
+                                data={"mail": username, "password": password})
 
-    body = "mail={mail}&password={password}".format(
-        mail=urllib.quote(username), password=urllib.quote(password))
-
-    req = httpmes.HTTPRequest.create(req_str)
-    req.set_body(body)
-
-    sock = socket.create_connection(("secure.nicovideo.jp", 443))
-    sock = ssl.wrap_socket(sock, ca_certs=_certfile_path,
-                           cert_reqs=ssl.CERT_REQUIRED)
-
-    sock.write(str(req))
-
-    # fixme!!! iowrapperのバグを直してiowrapperを使う
-    res_str = sock.read(10000)
-
-    res = httpmes.HTTPResponse.create(res_str)
-
-    cookie = None
-    for s in res.headers.getheaders("set-cookie"):
-        if s.startswith("user_session=user_session_"):
-            cookie = s
-            break
-
-    if not cookie:
+    if not res.ok:
         raise NicoNicoLoginError("login failed. email: %s" % username)
 
-    return cookie
+    return requests_session
 
 
-def get_nicohistory(video_id, cookie):
+def access_watchpage_with_session(video_id, requests_session):
     """video_idはsm...かスレッドid
     自動でリダイレクトはしない
     余計なcookieも入る"""
 
-    res, f = http11_get("http://www.nicovideo.jp/watch/" + video_id,
-                        {"Cookie": cookie}, load_body=False)
-    f.close()
+    res = requests_session.get("http://www.nicovideo.jp/watch/" + video_id)
 
-    cookie = None
-    for s in res.headers.getheaders("set-cookie"):
-        if s.startswith("nicohistory="):
-            cookie = s
-            break
-
-    if not cookie:
-        raise NicoNicoAccessError("no nicohistory cookie from server: \n"
-                                  "%s:\n"
-                                  "%s" % ("http://www.nicovideo.jp/watch/"
-                                          + video_id, res))
-
-    return cookie
+    return requests_session
 
 
-def get_video_url(video_id, cookie):
+def get_video_url(video_id, requests_session):
 
-    res = http11_get(
-        "http://flapi.nicovideo.jp/api/getflv/" + video_id,
-        dict(cookie=cookie))
+    res = requests_session.get(
+        "http://flapi.nicovideo.jp/api/getflv/" + video_id)
 
-    m = re.match(r".*url=([^&]*)(&.*)?", res.body)
-
+    m = re.match(r".*url=([^&]*)(&.*)?", res.text)
     if not m:
+        logger.error("can not get video url, response: %s", res.text)
         raise NicoNicoAccessError("can not get getflv info of %s" % video_id)
 
     video_url = urllib.unquote(m.group(1))
@@ -200,8 +123,11 @@ def fetch_all_saved_video():
     #     自分自身(nicocache)にリクエストを送って
     #     動画を読み
     #     saveする
+    debug_mode = nicocache.get_config(
+        "nicodwarf", "debug", default_config)
 
-    cookie = login_to_niconico()
+    requests_session = requests.Session()
+    login_to_niconico(requests_session)
     for video_cache in video_cache_list:
 
         try:
@@ -223,49 +149,38 @@ def fetch_all_saved_video():
                     "skipping.", video_id)
                 continue
 
-            if video_id.startswith("so"):
-                # watchページのリダイレクトを利用してスレッドidを取得
-                res = http11_get(
-                    "http://www.nicovideo.jp/watch/" + video_id,
-                    dict(cookie=cookie))
-
-                video_id = re.match(
-                    r"http://www.nicovideo.jp/watch/(.*)",
-                    res.headers["location"]).group(1)
-
-            video_url = get_video_url(video_id, cookie)
+            video_url = get_video_url(video_id, requests_session)
 
             if video_url.endswith("low"):
                 logger.info("video %s is forced economy mode. "
                             "skip fetching.", video_cache.info.video_id)
+                if not debug_mode:
+                    continue
+                else:
+                    logger.info("debug mode, fetch economy cache")
 
-            nicohistory_cookie = get_nicohistory(video_id, cookie)
+            access_watchpage_with_session(video_id, requests_session)
 
-            res, sockfile = http11_get(
-                video_url, {"Cookie": nicohistory_cookie}, False,
-                raise_on_error=False,
-                proxy=("localhost", nicocache_port))
+            proxies = {
+                "http": "http://localhost:%s" % nicocache_port}
+            res = requests_session.get(
+                url=video_url, proxies=proxies, stream=True)
 
-            if res.status_code != 200:
+            if not res.ok:
                 logger.error("access to nicovideo was denied: \n%s", res)
                 continue
 
             while True:
-                data = sockfile.read(4096 * 1024)
+                data = res.raw.read(4096 * 1024)
                 if not data:
                     break
 
-            sockfile.close()
-
-            http11_get("http://www.nicovideo.jp/watch/%s/save" %
-                       video_id, proxy=("localhost", nicocache_port))
+            requests_session.get("http://www.nicovideo.jp/watch/%s/save" %
+                                 video_id, proxies=proxies)
 
         except:
             logger.exception(
                 "exception raised. skip %s.", video_cache.info.video_id)
-
-        # サーバに負荷をかけ過ぎないようにするため、間隔をあける
-        time.sleep(30)
 
     logger.info("dwarf: finish fetching.")
 
@@ -273,8 +188,13 @@ def fetch_all_saved_video():
 def main_loop():
 
     fetch_time = datetime.time(hour=2, minute=1)
-
-    if 2 <= datetime.datetime.now().hour <= 6:
+    debug_mode = nicocache.get_config(
+        "nicodwarf", "debug", default_config)
+    if debug_mode:
+        # デバッグモードなら、１秒後にfetchを開始する
+        logger.info("debug mode. Nico dwarf will wake up soon.")
+        seconds_to_next_fetch_time = 1
+    elif 2 <= datetime.datetime.now().hour <= 6:
         # 初回(プラグインロード時)が夜中なら、１秒後にfetchを開始する
         logger.info("it's midnight. Nico dwarf will wake up soon.")
         seconds_to_next_fetch_time = 1
@@ -311,6 +231,7 @@ def check_passwd_file_format(passwd):
         logger.exception()
 
     return False
+
 
 pwfilename = nicocache.get_config(
     "nicodwarf", "passwordFile", default_config)
