@@ -79,6 +79,9 @@ def get_video_url(video_id, requests_session):
 
     video_url = urllib.unquote(m.group(1))
 
+    if video_url == "":
+        logger.error("can not get video url, response: %s", res.text)
+        raise NicoNicoAccessError("can not get getflv info of %s" % video_id)
     return video_url
 
 
