@@ -41,43 +41,6 @@ class NicoNicoLoginError(Exception):
     pass
 
 
-def http11_get(url, headers=None,
-               load_body=True, raise_on_error=True, proxy=()):
-
-    req = httpmes.HTTPRequest.create("GET %s HTTP/1.1\r\n\r\n" % str(url))
-
-    req.headers["Host"] = req.host
-    if proxy:
-        host, port = proxy
-    else:
-        host, port = req.host, req.port
-        req.scheme = ""
-        req.host = ""
-        req.port = None
-        port = port or 80
-
-    req.headers["Connection"] = "close"
-    if headers:
-        for k, v in headers.iteritems():
-            req.headers[k] = v
-
-    sock = iowrapper.create_sockfile((host, port))
-
-    sock.write(str(req))
-
-    res = httpmes.HTTPResponse.create(sock, load_body)
-
-    if raise_on_error and (400 <= res.status_code <= 599):
-        sock.close()
-        raise HTTPResponseError(res)
-
-    if load_body:
-        sock.close()
-        return res
-
-    return res, sock
-
-
 def login_to_niconico(requests_session):
     pwfilename = nicocache.get_config(
         "nicodwarf", "passwordFile", default_config)
