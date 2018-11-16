@@ -109,6 +109,91 @@ class UserScript(object):
         return self.require
 
 
+class UserScriptsGetter(object):
+
+    def __init__(self, user_script_dir):
+        self._user_script_dir = user_script_dir
+        self._user_script_dir_mtime = None
+        self._user_script_list = None
+
+    def __call__(self):
+        # 初回call時
+        if (self._user_script_dir_mtime is None):
+            self._load_user_scripts()
+
+        # userscript directory が更新されたとき
+        elif (self._user_script_dir_mtime !=
+                os.path.getmtime(self._user_script_dir)):
+            logger.info("user script directory `%s' is modified. "
+                        "have to reload.", self._user_script_dir)
+            self._load_user_scripts()
+
+        # １つずつ更新されているか確かめる
+        else:
+            new_user_script_list = []
+
+            def reload_if_modified(user_script):
+                user_script_path = user_script.user_script_path
+                if (user_script.mtime != os.path.getmtime(user_script_path)):
+                    logger.info("user script `%s' is modified. "
+                                "have to reload.", user_script_path)
+                    return self._load_user_script(user_script_path)
+                else:
+                    return user_script
+
+            new_user_script_list = map(reload_if_modified,
+                                       self._user_script_list)
+            new_user_script_list = filter(lambda us: us is not None,
+                                          new_user_script_list)
+
+            self._user_script_list = new_user_script_list
+
+        return self._user_script_list
+
+    @staticmethod
+    def _load_user_script(filename):
+        """mtimeを記録しておくカスタム版"""
+        logger.info("load user script: %s", filename)
+        user_script = load_user_script(filename)
+        if user_script is not None:
+            user_script.mtime = os.path.getmtime(filename)
+
+        return user_script
+
+    def _load_user_scripts(self):
+        logger.info("load user script directory: %s", self._user_script_dir)
+        user_script_dir_mtime = os.path.getmtime(self._user_script_dir)
+        self._user_script_list = load_user_scripts(
+            self._user_script_dir, self._load_user_script)
+
+        # トランザクションにしておく
+        self._user_script_dir_mtime = user_script_dir_mtime
+
+    @classmethod
+    def test(cls):
+        """簡易的なテスト"""
+
+        # 何も起きてない場合
+        user_script_getter = cls("nicomonkey")
+        user_script_list0 = user_script_getter()
+        user_script_list1 = user_script_getter()
+        assert user_script_list0 == user_script_list1
+
+        # ディレクトリが更新された場合
+        user_script_getter = cls("nicomonkey")
+        user_script_list0 = user_script_getter()
+        user_script_getter._user_script_dir_mtime = 0
+        user_script_list1 = user_script_getter()
+        assert user_script_list0 is not user_script_list1
+
+        # userscript が更新された場合
+        user_script_getter = cls("nicomonkey")
+        user_script_list0 = user_script_getter()
+        user_script_list0[0].mtime = 0
+        user_script_list1 = user_script_getter()
+        assert user_script_list0 is not user_script_list1
+
+
 # class NicoMonkeyUserScriptServer(proxy.ResponseServer):
 #
 #     """ローカルファイルシステムのユーザースクリプトをブラウザに提供する"""
@@ -141,19 +226,29 @@ class UserScript(object):
 #                             body_file=open(user_script_path),
 #                             server_sockfile=server_sockfile)
 
+def load_user_script(user_script_path):
+    """ user_script_path をロードして返す
+    読めなければNoneを返す"""
 
-def load_user_scripts(user_sript_dir):
+    try:
+        return UserScript(user_script_path)
+    except NotUserScriptError as e:
+        logger.error(e)
+        return None
+
+
+def load_user_scripts(user_sript_dir, load_user_script=load_user_script):
     """return: [UserScript(), ...]"""
 
     user_script_list = []
     for dirname, _, filenames in os.walk("nicomonkey"):
         for filename in filenames:
             if filename.endswith(".js"):
-                try:
-                    user_script_list.append(
-                        UserScript(os.path.join(dirname, filename)))
-                except NotUserScriptError as e:
+                user_script = load_user_script(os.path.join(dirname, filename))
+                if user_script is None:
                     logger.error(e)
+                else:
+                    user_script_list.append(user_script)
 
     return user_script_list
 
@@ -175,31 +270,12 @@ class NicoMonkeyResFilter(proxy.ResponseFilter):
 <!-- END nicomonkey-->
 """
 
-    def __init__(self, user_script_dir):
-        self._user_script_dir = user_script_dir
-        self._user_script_dir_mtime = 0
-        self._user_script_list = None
-
-        self._load_user_scripts()
-
-    def _load_user_scripts(self):
-        logger.info("load user script directory: %s", self._user_script_dir)
-        user_script_dir_mtime = os.path.getmtime(self._user_script_dir)
-        self._user_script_list = load_user_scripts(self._user_script_dir)
-
-        # トランザクションにしておく
-        self._user_script_dir_mtime = user_script_dir_mtime
-
-    def _reload_user_script_if_necessary(self):
-        if (self._user_script_dir_mtime !=
-                os.path.getmtime(self._user_script_dir)):
-            logger.info("user script directory `%s' is modified. "
-                        "have to reload.", self._user_script_dir)
-
-            self._load_user_scripts()
+    def __init__(self, user_script_getter):
+        self._user_script_getter = user_script_getter
+        self._user_script_list = self._user_script_getter()
 
     def accept(self, res, req, info):
-        self._reload_user_script_if_necessary()
+        self._user_script_list = self._user_script_getter()
         for user_script in self._user_script_list:
             if user_script.match_url(req.get_request_uri()):
                 return True
@@ -242,6 +318,15 @@ class NicoMonkeyResFilter(proxy.ResponseFilter):
 def get_extension():
 
     extension = nicocache.Extension("nicomonkey")
-    extension.response_filter = NicoMonkeyResFilter("nicomonkey")
+    extension.response_filter = NicoMonkeyResFilter(
+        UserScriptsGetter("nicomonkey"))
 
     return extension
+
+if __name__ == "__main__":
+    _logging.basicConfig()
+    logger.setLevel(_logging.INFO)
+    logger.info("testing")
+    UserScriptsGetter.test()
+
+    logger.info("Test seems to be OK.")

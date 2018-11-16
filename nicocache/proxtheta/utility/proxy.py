@@ -138,10 +138,11 @@ class ResponseFilter(object):
                 res = self.filtering(res, req, info)
                 return res
 
-            # response body already loaded as plain text
-            if ((res.body is not None and
-                 not (res.is_chunked() and
-                      res.headers.get("Content-Encoding", "") != ""))):
+            # response body already loaded as not chunked, not zipped file
+            if (res.body is not None and  # loaded
+                    not res.is_chunked() and  # not chunked
+                    # as unzipped
+                    res.headers.get("Content-Encoding") is None):
 
                 assert res.body is not None
                 res = self.filtering(res, req, info)
@@ -149,7 +150,7 @@ class ResponseFilter(object):
                 return res, body_file_hldr.release()
 
             if body_file_hldr.obj is not None:
-                res = common.load_boody(res, body_file_hldr.obj, req)
+                res = common.load_body(res, body_file_hldr.obj, req)
                 if res.body is None:
                     return res, body_file_hldr.release()
 
@@ -174,9 +175,9 @@ class ResponseFilter(object):
 class FilteringResponseServers(object):
 
     def __init__(self,
-                 request_filters=[],
-                 response_servers=[],
-                 response_filters=[]):
+                 request_filters=(),
+                 response_servers=(),
+                 response_filters=()):
         """
         request_filters: list of RequestFilter
         response_servers: list of ResponseServers

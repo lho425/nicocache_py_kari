@@ -2,12 +2,10 @@
 import StringIO
 import mimetools
 import urlparse
+import collections
 import copy
 
 
-def DEBUG(s):
-    print "DEBUD:",
-    print s
 
 
 class ParseError(Exception):
@@ -57,6 +55,15 @@ def _parse_uri(uri):
     r.host = host or ""
     return r
 
+def parse_uri_to_6_tuple(uri):
+    uri = _parse_uri(uri)
+
+    return (uri.scheme,
+            uri.host,
+            uri.port,
+            uri.path,
+            uri.query,
+            uri.fragment)
 
 def _unparse_uri(scheme, host, port, path, query, fragment):
     netloc = host if host is not None else ""
@@ -77,25 +84,63 @@ def remove_scheme_and_authority(req):
 
 
 def make_http_header_from_file(rfile):
-    h = mimetools.Message(rfile, 0)
-    del h.fp  # for deepcopy
-    return h
+    return HTTPHeaders.parse_file(rfile)
 
+
+class _Message(mimetools.Message):
+
+    def __init__(self, fp):
+        mimetools.Message.__init__(self, fp, 0)
+        del self.fp  # for deepcopy
+        
+
+class HTTPHeaders(_Message):
+
+    def __init__(self, headers_dict=None, _fp=None):
+
+        # for compatibility
+        # this code will be deleted when mimetools imdipend HTTPHeaders is written
+        if _fp is not None:
+            _Message.__init__(self, _fp)
+            return
+
+        
+        if headers_dict is None:
+            headers_dict = {}
+        
+        _Message.__init__(self, StringIO.StringIO(""))
+
+        for key, value in headers_dict.iteritems():
+            self["key"] = value
+
+    
+    def get_all(self, key):
+        return self.getheaders(key)
+
+    @staticmethod
+    def parse_file(fp):
+        return HTTPHeaders(headers_dict=None, _fp=fp)
 
 def get_empty_http_header():
-    return make_http_header_from_file(StringIO.StringIO(""))
+    return HTTPHeaders()
 
 # naming rule is based on rfc2616
 
 
 class HTTPMessage(object):
 
-    # when override __init__(), you must override copy()
 
     def __init__(self, start_line_str="", headers=None, body=""):
         self._start_line_str = start_line_str
         if headers is None:
             headers = get_empty_http_header()
+        if isinstance(headers, collections.Mapping):
+            http_headers = get_empty_http_header()
+            for key, value in headers.iteritems():
+                http_headers[key] = value
+            headers = http_headers
+            del http_headers
+
         self.headers = headers
         self.body = body
 
@@ -232,8 +277,7 @@ class HTTPRequest(HTTPMessage):
 
         uri = _parse_uri(uri)
 
-        return (method, (
-            uri.scheme,
+        return (method, (            uri.scheme,
             uri.host,
             uri.port,
             uri.path,
@@ -259,6 +303,16 @@ class HTTPRequest(HTTPMessage):
     # see rfc2616 section 4.3
     def get_content_length(self):
         return int(self.headers.get("Content-Length", 0))
+
+def create_http11_request(method="GET", uri=None, headers=None, body=None):
+    uri_tpl = parse_uri_to_6_tuple(uri)
+
+    req = HTTPRequest((method, uri_tpl, "HTTP/1.1"), headers, body)
+
+    if "Host" not in req.headers:
+        req.headers["Host"] = urlparse.urlsplit(uri).netloc
+    
+    return req
 
 
 class HTTPResponse(HTTPMessage):
@@ -306,7 +360,10 @@ class HTTPResponse(HTTPMessage):
         """if return value < 0, you have to read data until EOF."""
         return int(self.headers.get("Content-Length", -1))
 
+def create_http11_response(status_code, reason_phrase, headers=None, body=None):
 
+    return HTTPResponse(("HTTP/1.1", status_code, reason_phrase),headers, body) 
+    
 CHUNKED = "chunked"
 
 UNKNOWN = "unknown"
@@ -366,19 +423,12 @@ def set_body(mes, body):
     mes.set_content_length()
 
 
-class HTTPError(HTTPResponse, Exception):
+class HTTPError(HTTPResponse):
 
     def __init__(self, (http_version, status_code,  reason_phrase), headers=None, body=""):
         HTTPResponse.__init__(self, (http_version, status_code,  reason_phrase),
                               headers=headers, body=body)
-        Exception.__init__(
-            self, (http_version, status_code,  reason_phrase), headers, body)
 
-    def __deepcopy__(self, *args, **kw):
-        # with default implement, copy.deepcopy does not work.
-        # Exception class is the reason, I guess.
-        return HTTPError((self.http_version, self.status_code, self.reason_phrase),
-                         copy.deepcopy(self.headers), self.body)
 
 
 class HTTP11Error(HTTPError):

@@ -11,27 +11,28 @@ from . import common
 streaming_bufsize = 8192
 
 
-def streaming(srcf, distf, size=-1, bufsize=None):
+def streaming(srcf, destf, size=-1, bufsize=None):
     if bufsize is None:
         bufsize = streaming_bufsize
 
-    return common.copy_file(srcf, distf, size, bufsize)
+    return common.copy_file(srcf, destf, size, bufsize)
 
 
-def trancefer_chunked(srcf, distf):
-    """extract chunked data from srcf and copy to distf"""
-    while 1:
+def trancefer_chunked(srcf, destf):
+    """trancefer chunked data from srcf and copy to destf
+    without any processing."""
+    while True:
         size_str = srcf.readline()
         size = int(size_str, 16)  # fixme!!! can not handle chunk-extension
-        distf.write(size_str)
+        destf.write(size_str)
         if size == 0:
-            distf.write(srcf.readline())  # fixme!!! チャンク後ヘッダーの処理
+            destf.write(srcf.readline())  # fixme!!! cannot handle trailer!
             break
         else:
-            streaming(srcf, distf, size)
-            distf.write(srcf.readline())
+            streaming(srcf, destf, size)
+            destf.write(srcf.readline())
 
-    distf.flush()
+    destf.flush()
 
     return
 
@@ -49,11 +50,9 @@ def transfer_resbody_to_client(res, body_file, client_file, req=None):
     if httpmes.get_transfer_length(res, req) == "unknown":
         raise RuntimeError("unknown http transfer length")
 
-    # send body manually and efficiently
     if res.is_chunked():
         trancefer_chunked(body_file, client_file)
 
-    # fixme!!! this does not support CONNECT method
     elif res.is_connection_close():
         streaming(body_file, client_file)  # reply body
     else:

@@ -1,5 +1,8 @@
 // ==UserScript==
 // @name nico-thumb-popup
+// @include http://*.nicovideo.jp/*
+// @exclude http://smile*.nicovideo.jp/*
+// @exclude http://ext*.nicovideo.jp/*
 // @include http://www.nicovideo.jp/*
 // @include https://www.nicovideo.jp/*
 // ==/UserScript==
@@ -75,6 +78,62 @@ function logger_debug() {
 
 	var currentPopupThumb = null;
 	var currentMouseMoveEventListener = null;
+
+	var drawOnMouseMoveEventImpl = null; //function (event){...}
+
+	function drawOnMouseMoveEvent(event) {
+		if (drawOnMouseMoveEventImpl) {
+			drawOnMouseMoveEventImpl(event);
+		}
+	}
+
+	function ActivateDrawPopup(event) {
+		var drawPopupOnRight;
+		//カーソルが真ん中より左にあるときは、右にポップアップを表示する
+		//マウスオーバーした時点で決める
+		if (event.clientX < window.innerWidth / 2) {
+			drawPopupOnRight = true;
+		} else {
+			drawPopupOnRight = false;
+		}
+
+		// =======================ページの一番上==
+		//    A
+		//  window.scrollY              ---------popupのtop--
+		//    V                                  |はみ出た分           |
+		// --------ブラウザで表示してる一番上端-------|--                 |
+
+
+		var topIntercept = 0; // topの切片
+		//上にはみ出ていたら、はみ出ている分+αを下にずらす、つまりy座標を増やす
+		//下にずらす分はマウスオーバーした時点で決める
+		//ポップアップのtop座標 = (カーソルのページの一番上からの距離) - (カーソルより上にポップアップして欲しいので、上にずらす分) - (カーソルから少し離す分)
+		//=(window.scrollY + event.clientY) - popupThumbHeight - 30
+		//はみ出た分 = window.scrollY - top  = - (event.clientY - popupThumbHeight - 30)
+		var extra = -(event.clientY - popupThumbHeight - 30);
+		if (extra > 0) {
+			//上にはみ出ていたら、はみ出ている分+αを下にずらす、つまりtop座標を増やす
+			topIntercept = extra + 45;
+		}
+
+		logger_debug("### popThumbOn dubug log ###");
+		logger_debug("event.clientY", event.clientY);
+		logger_debug("popupThumbHeight", popupThumbHeight);
+		logger_debug("-(event.clientY - popupThumbHeight - 30)", extra);
+		logger_debug("-(event.clientY - popupThumbHeight - 30) > 0", extra > 0);
+		logger_debug("topIntercept", topIntercept);
+
+		drawOnMouseMoveEventImpl = function (event) {
+			drawPopupThumb(drawPopupOnRight, topIntercept, event);
+		};
+		// addするのはImplの方ではないので注意
+		document.addEventListener("mousemove", drawOnMouseMoveEvent, false);
+	}
+
+	function InactivateDrawPopup() {
+		// removeするのはImplの方ではないので注意
+		document.removeEventListener("mousemove", drawOnMouseMoveEvent, false);
+	}
 
 
 	function drawPopupThumb(drawPopupOnRight, topIntercept, event) {
@@ -153,57 +212,25 @@ function logger_debug() {
 
 	window.popThumbOn = function (contentType, contentID, event) {
 		var thumbIframe = getThumbIframe(contentType, contentID);
+
+		// こうすることでポップアップは常に一つ表示される。
+		// ポップアップが残って複数表示されるなんてことはなくなる。
 		if (currentPopupThumb !== thumbIframe) {
 			popThumbOff();
 		}
+
 		currentPopupThumb = thumbIframe;
 		currentPopupThumb.style.display = "";
 
-		var drawPopupOnRight;
-		//カーソルが真ん中より左にあるときは、右にポップアップを表示する
-		//マウスオーバーした時点で決める
-		if (event.clientX < window.innerWidth / 2) {
-			drawPopupOnRight = true;
-		} else {
-			drawPopupOnRight = false;
-		}
-
-		// =======================ページの一番上==
-		//    A
-		//  window.scrollY              ---------popupのtop--
-		//    V                                  |はみ出た分           |
-		// --------ブラウザで表示してる一番上端-------|--                 |
-
-
-		var topIntercept = 0; // topの切片
-		//上にはみ出ていたら、はみ出ている分+αを下にずらす、つまりy座標を増やす
-		//下にずらす分はマウスオーバーした時点で決める
-		//ポップアップのtop座標 = (カーソルのページの一番上からの距離) - (カーソルより上にポップアップして欲しいので、上にずらす分) - (カーソルから少し離す分)
-		//=(window.scrollY + event.clientY) - popupThumbHeight - 30
-		//はみ出た分 = window.scrollY - top  = - (event.clientY - popupThumbHeight - 30)
-		var extra = -(event.clientY - popupThumbHeight - 30);
-		if (extra > 0) {
-			//上にはみ出ていたら、はみ出ている分+αを下にずらす、つまりtop座標を増やす
-			topIntercept = extra + 45;
-		}
-
-		logger_debug("### popThumbOn dubug log ###");
-		logger_debug("event.clientY", event.clientY);
-		logger_debug("popupThumbHeight", popupThumbHeight);
-		logger_debug("-(event.clientY - popupThumbHeight - 30)", extra);
-		logger_debug("-(event.clientY - popupThumbHeight - 30) > 0", extra > 0);
-		logger_debug("topIntercept", topIntercept);
-
-		currentMouseMoveEventListener = function (event) {
-			drawPopupThumb(drawPopupOnRight, topIntercept, event);
-		};
-		document.addEventListener("mousemove", currentMouseMoveEventListener, false);
+		ActivateDrawPopup(event);
 	};
 
 	window.popThumbOff = function () {
-		if (currentPopupThumb !== null) {
-			currentPopupThumb.style.display = "none";
-			document.removeEventListener("mousemove", currentMouseMoveEventListener, false);
-		}
+		if (!currentPopupThumb)
+			return;
+
+		currentPopupThumb.style.display = "none";
+		currentPopupThumb = null;
+		InactivateDrawPopup();
 	}
 })();
