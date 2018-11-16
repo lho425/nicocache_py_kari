@@ -47,3 +47,17 @@ listenPort = 8080
 # 非lowキャッシュがcompleteしたときにlowキャッシュがあったらremoveする
 # デフォルト値: true
 #autoRemoveLow=true
+
+[nicodwarf]
+# nicodwarf は save されたキャッシュを夜中の2時にエコノミーでない画質でダウンロードするプラグイン
+
+# nicodwarfを有効にするかどうか [S]
+# デフォルト値: true
+#enable=true
+
+# ニコニコのアカウントの email address と password を記載したファイルの場所 [S]
+# 1行目に email address
+# 2行目に password
+# が書いてある必要がある。
+# デフォルト値は設定されていない。
+#passwordFile=
