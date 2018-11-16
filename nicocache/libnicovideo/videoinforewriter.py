@@ -9,7 +9,7 @@ import urllib
 import re
 import json
 import urlparse
-
+from pprint import pprint
 from proxtheta.utility import common
 from proxtheta.utility.client import get_http_resource
 from proxtheta.utility.proxy import ResponseFilter
@@ -50,7 +50,7 @@ class RewriterAbstructBase(ResponseFilter):
         pass
 
     def _rewrite(self, content, req, res):
-        """実装しろ(書き換えたcontentをbytes型で返せ、_rewrite_implを呼べ)"""
+        """実装しろ(書き換えたcontentをbytes型で返せ、_rewrite_mainを呼べ)"""
         pass
 
     def _rewrite_main(self, *args):
@@ -60,7 +60,7 @@ class RewriterAbstructBase(ResponseFilter):
 
 def dict_to_str_list(a_dict, a_list=None, indent_level=0):
     a_list = a_list or []
-    #a_list.append("    " * indent_level)
+    # a_list.append("    " * indent_level)
     a_list.append("{\n")
     for k, v in a_dict.iteritems():
         a_list.append("    " * (indent_level + 1))
@@ -104,12 +104,19 @@ class GinzaRewriter(RewriterAbstructBase):
             else:
                 escaped_json = True
                 match = self.watchAPIDataContainer_pattern.match(content)
+                if not match:
+                    # Ginza player ではないので処理をやめる
+                    return content
                 watch_api_data = match.group("watch_api_data")
                 # エスケープされたjson文字列のエスケープを解く
                 watch_api_data = unescape(
                     watch_api_data, {"&quot;": '"'})
             # json文字列をdictにする
             watch_api_data_dict = json.loads(watch_api_data)
+
+            if not "flashvars" in watch_api_data_dict:
+                # Ginza player ではないので処理をやめる
+                return content
 
             # 動画(mp4等)のURLを得るにはさらにURLエンコードを解く必要がある(=とか%がエンコードされている)
             flvinfo = watch_api_data_dict["flashvars"]["flvInfo"]
@@ -156,6 +163,76 @@ class GinzaRewriter(RewriterAbstructBase):
             return content
 
     def _rewrite_main(self, req, watch_api_data_dict, flvinfo_dict):
-        """!!!ドキュメントは後で書きます"""
+        """このメソッドをオーバーライドして
+        watch_api_data_dict, flvinfo_dict
+        の書き換えを実際に行う"""
 
-        return req, watch_api_data_dict, flvinfo_dict
+        return watch_api_data_dict, flvinfo_dict
+
+
+class Html5PlayerRewriter(RewriterAbstructBase):
+    # 頑張ってニコキャッシュPyのAPIが引っかからないようにする
+    req_path_pattern = re.compile("/+watch/+[^/]+/*$")
+
+    watchAPIDataContainer_pattern = re.compile(
+        """(?P<head>.*?)"""
+        """<div id="js-initial-watch-data" """
+        """data-api-data="(?P<data_api_data>.*)" """
+        """data-environment="(?P<data_environment>.*)" hidden></div>(?P<tail>.*)""", re.DOTALL)
+
+    def _is_videoinfo_request(self, req):
+        return (req.host.startswith("www.nicovideo.jp") and
+                self.req_path_pattern.match(req.path))
+
+    def _rewrite(self, content, req, res):
+        escaped_json = bool()
+
+        try:
+            if res.headers.get("Content-Type").\
+                    startswith("application/json"):
+                escaped_json = False
+                data_api_data = content
+
+            else:
+                escaped_json = True
+                match = self.watchAPIDataContainer_pattern.match(content)
+                data_api_data = match.group("data_api_data")
+                # エスケープされたjson文字列のエスケープを解く
+                data_api_data = unescape(
+                    data_api_data, {"&quot;": '"'})
+
+            # json文字列をdictにする
+            data_api_data_dict = json.loads(data_api_data)
+
+            # pprint(data_api_data_dict)
+
+            data_api_data_dict = self._rewrite_main(req, data_api_data_dict)
+
+            data_api_data = json.dumps(data_api_data_dict)
+
+            if not escaped_json:
+                return data_api_data
+            else:
+                # htmlにjsonが埋め込まれていたので、エスケープした上で、ちゃんと戻してあげる
+                data_api_data = escape(
+                    data_api_data, {'"': "&quot;"})
+                return ("""{head}"""
+                        """<div id="js-initial-watch-data" """
+                        """data-api-data="{data_api_data}" """
+                        """data-environment="{data_environment}" hidden></div>{tail}""").format(
+                            head=match.group("head"),
+                            data_api_data=data_api_data,
+                    data_environment=match.group("data_environment"),
+                    tail=match.group("tail"))
+
+        except Exception as e:
+            logger.exception("error occurred, fallback.\n%s", e)
+
+            return content
+
+    def _rewrite_main(self, req, data_api_data_dict):
+        """このメソッドをオーバーライドして
+        data_api_data_dict
+        の書き換えを実際に行う"""
+
+        return data_api_data_dict

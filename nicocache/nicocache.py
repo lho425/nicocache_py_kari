@@ -619,7 +619,10 @@ def main():
     video_cache_manager = libnicocache.VideoCacheManager(
         cache_dir_path, VideoCache)
 
-    video_info_rewriter = rewriter.Rewriter(video_cache_manager)
+    ginza_video_info_rewriter = rewriter.NicoCacheGinzaRewriter(
+        video_cache_manager)
+    html5_video_info_rewriter = rewriter.NicoCacheHtml5PlayerRewriter(
+        video_cache_manager)
 
     _nicocache.video_cache_manager = video_cache_manager
     _nicocache.nonproxy_camouflage = nonproxy_camouflage
@@ -635,7 +638,8 @@ def main():
         LocalURIHandler(),
         _nicocache.handle_video_request,
         _nicocache.simple_proxy_response_server]
-    default_response_filters = [video_info_rewriter]
+    default_response_filters = [
+        ginza_video_info_rewriter, html5_video_info_rewriter]
 
     logger.info("finish initializing")
 
