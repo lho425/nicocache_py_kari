@@ -146,9 +146,6 @@ class NicoCacheGinzaRewriter(NicoCacheRewriterMixin,
         return watch_api_data_dict, flvinfo_dict
 
 
-Rewriter = NicoCacheGinzaRewriter
-
-
 class NicoCacheHtml5PlayerRewriter(NicoCacheRewriterMixin,
                                    videoinforewriter.Html5PlayerRewriter):
 
@@ -239,6 +236,3 @@ class NicoCacheHtml5PlayerRewriter(NicoCacheRewriterMixin,
         logger.debug("%s", pformat(data))
 
         return data
-
-
-Rewriter = NicoCacheHtml5PlayerRewriter
