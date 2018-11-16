@@ -110,8 +110,8 @@ def get_video_url(video_id, requests_session):
         "http://flapi.nicovideo.jp/api/getflv/" + video_id)
 
     m = re.match(r".*url=([^&]*)(&.*)?", res.text)
-
     if not m:
+        logger.error("can not get video url, response: %s", res.text)
         raise NicoNicoAccessError("can not get getflv info of %s" % video_id)
 
     video_url = urllib.unquote(m.group(1))
