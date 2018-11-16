@@ -182,6 +182,9 @@ def fetch_all_saved_video():
             logger.exception(
                 "exception raised. skip %s.", video_cache.info.video_id)
 
+        # 連続でアクセスするとブロックされてしまうので、sleepする
+        time.sleep(3)
+
     logger.info("dwarf: finish fetching.")
 
 
