@@ -74,13 +74,13 @@ def get_video_url(video_id, requests_session):
 
     m = re.match(r".*url=([^&]*)(&.*)?", res.text)
     if not m:
-        logger.error("can not get video url, response: %s", res.text)
+        logger.debug("can not get video url, response: %s", res.text)
         raise NicoNicoAccessError("can not get getflv info of %s" % video_id)
 
     video_url = urllib.unquote(m.group(1))
 
     if video_url == "":
-        logger.error("can not get video url, response: %s", res.text)
+        logger.debug("can not get video url, response: %s", res.text)
         raise NicoNicoAccessError("can not get getflv info of %s" % video_id)
     return video_url
 
