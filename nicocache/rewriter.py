@@ -34,8 +34,7 @@ def _is_user_economy_mode(req):
     req_query = parse_qs(req.query, keep_blank_values=True)
 
     return (("eco" in req_query) and
-            (req_query["eco"][0] != "" or
-             req_query["eco"][0] != "0"))
+            req_query["eco"][0] != "0")
 
 # NicoCacheHtml5PlayerRewriter は NicoCacheGinzaRewriter のコピペして一部を書き換えたもので、
 # よろしくないコードだけど、Ginza(flash) はサポートしたくないので、
