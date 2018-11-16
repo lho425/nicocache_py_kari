@@ -104,12 +104,19 @@ class GinzaRewriter(RewriterAbstructBase):
             else:
                 escaped_json = True
                 match = self.watchAPIDataContainer_pattern.match(content)
+                if not match:
+                    # Ginza player ではないので処理をやめる
+                    return content
                 watch_api_data = match.group("watch_api_data")
                 # エスケープされたjson文字列のエスケープを解く
                 watch_api_data = unescape(
                     watch_api_data, {"&quot;": '"'})
             # json文字列をdictにする
             watch_api_data_dict = json.loads(watch_api_data)
+
+            if not "flashvars" in watch_api_data_dict:
+                # Ginza player ではないので処理をやめる
+                return content
 
             # 動画(mp4等)のURLを得るにはさらにURLエンコードを解く必要がある(=とか%がエンコードされている)
             flvinfo = watch_api_data_dict["flashvars"]["flvInfo"]
@@ -220,6 +227,7 @@ class Html5PlayerRewriter(RewriterAbstructBase):
 
         except Exception as e:
             logger.exception("error occurred, fallback.\n%s", e)
+
             return content
 
     def _rewrite_main(self, req, data_api_data_dict):
