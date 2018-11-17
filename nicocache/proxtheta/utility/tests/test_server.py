@@ -19,7 +19,7 @@ class Test_streaming(unittest.TestCase):
 
         streaming(src, dest)
 
-        self.assertEquals(data, dest.getvalue())
+        self.assertEqual(data, dest.getvalue())
 
     def test_size_given(self):
 
@@ -29,7 +29,7 @@ class Test_streaming(unittest.TestCase):
 
         streaming(src, dest, size=10)
 
-        self.assertEquals(data[0:10], dest.getvalue())
+        self.assertEqual(data[0:10], dest.getvalue())
 
 
 class Test_trancefer_chunked(unittest.TestCase):
@@ -42,7 +42,7 @@ class Test_trancefer_chunked(unittest.TestCase):
 
         trancefer_chunked(srcf, destf)
 
-        self.assertEquals(srcf.getvalue(), destf.getvalue())
+        self.assertEqual(srcf.getvalue(), destf.getvalue())
 
     @unittest.expectedFailure
     def test_with_chunk_extension(self):
@@ -54,7 +54,7 @@ class Test_trancefer_chunked(unittest.TestCase):
 
         trancefer_chunked(srcf, destf)
 
-        self.assertEquals(srcf.getvalue(), destf.getvalue())
+        self.assertEqual(srcf.getvalue(), destf.getvalue())
 
 
 class Test_transfer_resbody_to_client(unittest.TestCase):
@@ -69,7 +69,7 @@ class Test_transfer_resbody_to_client(unittest.TestCase):
 
         transfer_resbody_to_client(res, body_file, client_file)
 
-        self.assertEquals(b"", client_file.getvalue())
+        self.assertEqual(b"", client_file.getvalue())
 
     def test_CONNECT(self):
 

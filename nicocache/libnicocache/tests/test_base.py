@@ -253,12 +253,12 @@ class TestCachingReader(NicoCacheTestCase):
 
         with open(self.get_real_path("cachefile.txt"), "wb") as cachefile:
 
-            cachefile.write("a" * 100)
-            self.originalfile = io.BytesIO("b" * 100)
+            cachefile.write(b"a" * 100)
+            self.originalfile = io.BytesIO(b"b" * 100)
             cachefile.seek(0, 0)
             self.originalfile.seek(0, 0)
 
-            self.complete_data = ''.join(["a" * 100, "b" * 100])
+            self.complete_data = b''.join([b"a" * 100, b"b" * 100])
 
     def tearDown(self):
         self.rm_testdir()
@@ -293,7 +293,7 @@ class TestCachingReader(NicoCacheTestCase):
         data = caching_reader.read(90)
 
         self.assertEqual(len(data), 90)
-        self.assertEqual(data, "a" * 90)
+        self.assertEqual(data, b"a" * 90)
 
         caching_reader.close()
 
@@ -310,12 +310,12 @@ class TestCachingReader(NicoCacheTestCase):
         data = caching_reader.read(20)
 
         self.assertEqual(len(data), 20)
-        self.assertEqual(data, "a" * 10 + "b" * 10)
+        self.assertEqual(data, b"a" * 10 + b"b" * 10)
 
         caching_reader.close()
 
         with open(self.get_real_path("cachefile.txt"), "rb") as cachefile:
-            self.assertEqual(cachefile.read(), "a" * 100 + "b" * 10)
+            self.assertEqual(cachefile.read(), b"a" * 100 + b"b" * 10)
 
     def test_complete_cache_true(self):
         cachefile = open(self.get_real_path("cachefile.txt"), "r+b")

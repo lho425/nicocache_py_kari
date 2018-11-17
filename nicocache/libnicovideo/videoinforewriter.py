@@ -5,10 +5,10 @@
 import logging as _logging
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape, unescape
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import re
 import json
-import urlparse
+import urllib.parse
 from pprint import pprint
 from proxtheta.utility import common
 from proxtheta.utility.client import get_http_resource
@@ -62,7 +62,7 @@ def dict_to_str_list(a_dict, a_list=None, indent_level=0):
     a_list = a_list or []
     # a_list.append("    " * indent_level)
     a_list.append("{\n")
-    for k, v in a_dict.iteritems():
+    for k, v in a_dict.items():
         a_list.append("    " * (indent_level + 1))
         if isinstance(v, dict):
             a_list.append("%s: " % k)
@@ -123,10 +123,10 @@ class GinzaRewriter(RewriterAbstructBase):
             # URLエンコードを解く、そうすると値がURLエンコードされたクエリ文字列がでてくる
             # nickname=%E2%98%86&param=... <=こんな感じの
             # 通常のURLにおけるクエリと同じ
-            flvinfo_query_str = urllib.unquote(flvinfo)
+            flvinfo_query_str = urllib.parse.unquote(flvinfo)
 
             # URLのクエリをdictにする
-            flvinfo_dict = urlparse.parse_qs(str(flvinfo_query_str))
+            flvinfo_dict = urllib.parse.parse_qs(str(flvinfo_query_str))
             # 下の注意に書いてあることを回避するためにstrに変換してからパースさせる
             # ここまでくれば好き勝手いじれるでしょう
             watch_api_data_dict, flvinfo_dict = self._rewrite_main(
@@ -142,8 +142,8 @@ class GinzaRewriter(RewriterAbstructBase):
             # また、pythonはu'\xij'をu'\u00ij'と同等に解釈する
             # https://www.python.org/dev/peps/pep-0223/
             # http://docs.python.jp/2/howto/unicode.html#python-unicode
-            flvinfo_query_str = urllib.urlencode(flvinfo_dict, True)
-            flvinfo = urllib.quote(flvinfo_query_str)
+            flvinfo_query_str = urllib.parse.urlencode(flvinfo_dict, True)
+            flvinfo = urllib.parse.quote(flvinfo_query_str)
 
             # json dictに入れるときはunicode型にする必要はない
             watch_api_data_dict["flashvars"]["flvInfo"] = flvinfo

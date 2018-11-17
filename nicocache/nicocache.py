@@ -14,7 +14,7 @@
 #
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import absolute_import
+
 
 import errno
 import importlib
@@ -46,7 +46,7 @@ from .urlapi import (LocalURIHandler, NicoCacheAPIHandler,
                      ReqForThisServerHandler)
 
 if sys.version_info.major == 2:
-    from ConfigParser import RawConfigParser
+    from configparser import RawConfigParser
 else:
     from configparser import RawConfigParser
 
@@ -591,7 +591,7 @@ def main():
 
     logger.info(
         "guessed system default encoding: %s", locale.getpreferredencoding())
-    logger.info(u"ニコキャッシュ.py(仮)")
+    logger.info("ニコキャッシュ.py(仮)")
 
     logger.info("initializing")
 

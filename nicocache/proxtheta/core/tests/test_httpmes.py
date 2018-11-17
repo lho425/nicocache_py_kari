@@ -6,11 +6,10 @@ from .. import httpmes
 
 class TestHTTPRequest(unittest.TestCase):
 
-
     def test(self):
         req = httpmes.create_http11_request(uri="http://test.com:99"
-                                               "/aaa/bbb?param1=aaa&param2=bbb&param1=ccc",
-                                               headers={"Connection": "close"})
+                                            "/aaa/bbb?param1=aaa&param2=bbb&param1=ccc",
+                                            headers={"Connection": "close"})
         self.assertEqual(req.host, "test.com")
         self.assertEqual(req.port, 99)
         self.assertEqual(req.query, "param1=aaa&param2=bbb&param1=ccc")
@@ -18,8 +17,8 @@ class TestHTTPRequest(unittest.TestCase):
         self.assertEqual(req.headers["Host"], "test.com:99")
         self.assertEqual(req.headers.get_all("Connection"), ["close"])
 
-class TestHTTPRequestFromString(unittest.TestCase):
 
+class TestHTTPRequestFromString(unittest.TestCase):
 
     def test(self):
 
@@ -31,7 +30,7 @@ Myheader: bbb\r
 \r
 hello
 """
-        
+
         req = httpmes.HTTPRequest.create(req_str)
         self.assertEqual(req.host, "test.com")
         self.assertEqual(req.port, 99)
@@ -40,11 +39,12 @@ hello
         # req.headers.get_all("Connection")
         self.assertEqual(req.headers.getheaders("Connection"), ["close"])
 
+
 class TestHTTPRequestFromTuple(unittest.TestCase):
 
     def test(self):
 
-        req = httpmes.HTTPRequest(("GET", ("http","test.com", 99, "/", "param1=aaa&param2=bbb&param1=ccc", ""),
+        req = httpmes.HTTPRequest(("GET", ("http", "test.com", 99, "/", "param1=aaa&param2=bbb&param1=ccc", ""),
                                    "HTTP/1.1"), headers={"Connection": "close"})
 
         self.assertEqual(req.host, "test.com")
@@ -54,15 +54,30 @@ class TestHTTPRequestFromTuple(unittest.TestCase):
         # req.headers.get_all("Connection")
         self.assertEqual(req.headers.getheaders("Connection"), ["close"])
 
+
 class TestHTTPResponse(unittest.TestCase):
 
     def test_set_body(self):
 
-        res = httpmes.create_http11_response(200, "OK", {"Test": "test", "Content-Encoding": "gzip"})
+        res = httpmes.create_http11_response(
+            200, "OK", {"Test": "test", "Content-Encoding": "gzip"})
 
-        res.set_body("abc")
-        
-        self.assertEquals("abc", res.body)
-        self.assertEquals(3, res.get_content_length())
-        self.assertEquals("test", res.headers["Test"])
-        self.assertEquals("gzip", res.headers["Content-Encoding"])
+        res.set_body(b"abc")
+
+        self.assertEqual(b"abc", res.body)
+        self.assertEqual(3, res.get_content_length())
+        self.assertEqual("test", res.headers["Test"])
+        self.assertEqual("gzip", res.headers["Content-Encoding"])
+
+    def test_set_body_to_text(self):
+
+        res = httpmes.create_http11_response(
+            200, "OK", {"Test": "test", "Content-Encoding": "gzip"})
+
+        res.set_body("あいう")
+
+        self.assertEqual("あいう".encode("utf-8"), res.body)
+        self.assertEqual("text/plain; charset=utf-8",
+                         res.headers["Content-Type"])
+        self.assertEqual("test", res.headers["Test"])
+        self.assertEqual("gzip", res.headers["Content-Encoding"])

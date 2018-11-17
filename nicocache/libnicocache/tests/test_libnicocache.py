@@ -3,7 +3,7 @@ import unittest
 
 
 import os
-import StringIO
+import io
 import shutil
 from proxtheta import utility
 from proxtheta.core import httpmes
@@ -117,7 +117,8 @@ NicoCacheTestCase = test_base.NicoCacheTestCase
 
 class SocketWrapperMock(iowrapper.FileWrapper):
 
-    def __init__(self, (host, port), close=True, force_economy=False):
+    def __init__(self, xxx_todo_changeme, close=True, force_economy=False):
+        (host, port) = xxx_todo_changeme
         self._before_read = True
 
         self.address = proxtheta.core.common.Address((host, port))
@@ -125,8 +126,8 @@ class SocketWrapperMock(iowrapper.FileWrapper):
 
         self._host = host
 
-        self._file_from_client = StringIO.StringIO()
-        self._file_to_client = StringIO.StringIO()
+        self._file_from_client = io.BytesIO()
+        self._file_to_client = io.BytesIO()
         iowrapper.FileWrapper.__init__(self, self._file_to_client, close=close)
 
     def write(self, data):
@@ -147,9 +148,9 @@ class SocketWrapperMock(iowrapper.FileWrapper):
             raise RuntimeError("BAD request" + str(req))
 
         if req.query.endswith("low"):
-            content = "a" * 50 + "b" * 50
+            content = b"a" * 50 + b"b" * 50
         else:
-            content = "a" * 100 + "b" * 100
+            content = b"a" * 100 + b"b" * 100
 
         try:
             if self._force_economy and not req.query.endswith("low"):
@@ -179,7 +180,7 @@ class SocketWrapperMock(iowrapper.FileWrapper):
 
                 httpmes.set_body(res, content)
         finally:
-            self._file_to_client.write(str(res))
+            self._file_to_client.write(bytes(res))
 
             self._file_to_client.seek(0, 0)
 
@@ -196,13 +197,15 @@ class SocketWrapperMock(iowrapper.FileWrapper):
         return iowrapper.FileWrapper.readline(self, size=size)
 
 
-def create_sockfile((host, port), ssl=None):
+def create_sockfile(xxx_todo_changeme1, ssl=None):
     """モックを返す"""
+    (host, port) = xxx_todo_changeme1
     return SocketWrapperMock((host, port))
 
 
-def create_sockfile_force_economy((host, port), force_economy=True):
+def create_sockfile_force_economy(xxx_todo_changeme2, force_economy=True):
     """モックを返す"""
+    (host, port) = xxx_todo_changeme2
     return SocketWrapperMock((host, port), force_economy=True)
 
 
@@ -232,12 +235,12 @@ class TestSocketWrapperMock(unittest.TestCase):
             ("GET", ("http", host, None, "/smile", "v=0.0", ""), "HTTP/1.1"))
         req.headers["Host"] = host
         server_sockfile = create_sockfile((host, 80))
-        server_sockfile.write(str(req))
+        server_sockfile.write(bytes(req))
 
         res = httpmes.HTTPResponse.create(server_sockfile, load_body=1)
         server_sockfile.close()
 
-        self.assertEqual(res.body, "a" * 100 + "b" * 100)
+        self.assertEqual(res.body, b"a" * 100 + b"b" * 100)
 
 
 class TestVideoCacheFileManager(NicoCacheTestCase):
@@ -317,10 +320,10 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
         self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
 
         with open(self.get_real_path("subdir1/sm8_ニコキャッシュpyテストsm8.mp4"), "wb") as f:
-            f.write("a" * 100 + "b" * 200)
+            f.write(b"a" * 100 + b"b" * 200)
 
         with open(self.get_real_path("subdir1/tmp_sm10_ニコキャッシュpyテストsm10.mp4"), "wb") as f:
-            f.write("a" * 100)
+            f.write(b"a" * 100)
         filesystem_wrapper = pathutil.FileSystemWrapper()
         video_cache_file_manager = VideoCacheFileManager(
             filesystem_wrapper, VideoCacheFile)
@@ -353,7 +356,7 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
 
         data = respack.body_file.read()
 
-        self.assertEqual(data, "a" * 100 + "b" * 200)
+        self.assertEqual(data, b"a" * 100 + b"b" * 200)
 
         respack.close()
 
@@ -378,7 +381,7 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
 
         data = respack.body_file.read()
 
-        self.assertEqual(data, "a" * 10 + "b" * 10)
+        self.assertEqual(data, b"a" * 10 + b"b" * 10)
 
         respack.close()
 
@@ -397,7 +400,7 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
 
         data = respack.body_file.read(60)
 
-        self.assertEqual(data, "a" * 50 + "b" * 10)
+        self.assertEqual(data, b"a" * 50 + b"b" * 10)
 
         respack.close()
 
@@ -416,7 +419,7 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
 
         data = respack.body_file.read()
 
-        self.assertEqual(data, "a" * 100 + "b" * 100)
+        self.assertEqual(data, b"a" * 100 + b"b" * 100)
         self.assertEqual(respack.res.status_code, 200)
         self.assertIsNone(respack.res.headers.get("Content-Range", None))
         respack.close()
@@ -441,7 +444,7 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
 
         data = respack.body_file.read()
 
-        self.assertEqual(data, "a" * 10 + "b" * 10)
+        self.assertEqual(data, b"a" * 10 + b"b" * 10)
         respack.close()
 
     def test_create_response_with_tmp_localcache_with_outofcache_range(self):
@@ -467,7 +470,7 @@ class TestVideoCacheManager_make_http_video_resource(NicoCacheTestCase):
 
         data = respack.body_file.read()
 
-        self.assertEqual(data, "b" * 10)
+        self.assertEqual(data, b"b" * 10)
         respack.close()
 
 
@@ -485,10 +488,10 @@ class TestVideoCacheManager(NicoCacheTestCase):
         self.make_file("subdir2/tmp_so20low_タイトル.avi.mp4")
 
         with open(self.get_real_path("subdir1/sm8_ニコキャッシュpyテストsm8.mp4"), "wb") as f:
-            f.write("a" * 100 + "b" * 200)
+            f.write(b"a" * 100 + b"b" * 200)
 
         with open(self.get_real_path("subdir1/tmp_sm10_ニコキャッシュpyテストsm10.mp4"), "wb") as f:
-            f.write("a" * 100)
+            f.write(b"a" * 100)
         filesystem_wrapper = pathutil.FileSystemWrapper()
         video_cache_file_manager = VideoCacheFileManager(
             filesystem_wrapper, VideoCacheFile)

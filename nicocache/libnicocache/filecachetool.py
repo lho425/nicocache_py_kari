@@ -64,7 +64,7 @@ class CachingReader(object):
 
                 if len(data) > 0:
                     # jp!!!すでにcachefileから読まれたデータがあるとき
-                    data = ''.join((data, data_from_orig))
+                    data = b''.join((data, data_from_orig))
                 else:
                     data = data_from_orig
 

@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -
-import StringIO
-import mimetools
-import urlparse
+import io
+import http.client
+import urllib.parse
 import collections
 import copy
-
-
 
 
 class ParseError(Exception):
@@ -16,10 +14,10 @@ class ParseError(Exception):
 
 
 def _parse_request_line(s):
-    s = s.rstrip("\r\n")
+    s = s.rstrip(b"\r\n")
     words = s.split(None, 3)
     if len(words) == 2:
-        words.append("")
+        words.append(b"")
 
     if len(words) != 3:
         raise ParseError(s)
@@ -27,10 +25,10 @@ def _parse_request_line(s):
 
 
 def _parse_status_line(s):
-    s = s.rstrip("\r\n")
+    s = s.rstrip(b"\r\n")
     words = s.split(None, 2)
     if len(words) == 2:
-        words.append("")
+        words.append(b"")
 
     if len(words) != 3:
         raise ParseError(s)
@@ -49,27 +47,24 @@ def _parse_host_port(a_str):
     return host, int(port_str)
 
 
-def _parse_uri(uri):
-    r = urlparse.urlsplit(uri)
-    host = r.hostname
-    r.host = host or ""
-    return r
-
 def parse_uri_to_6_tuple(uri):
-    uri = _parse_uri(uri)
+    if isinstance(uri, bytes):
+        uri = uri.decode("latin")
+    uri = urllib.parse.urlsplit(uri)
 
     return (uri.scheme,
-            uri.host,
+            uri.hostname or "",
             uri.port,
             uri.path,
             uri.query,
             uri.fragment)
 
+
 def _unparse_uri(scheme, host, port, path, query, fragment):
     netloc = host if host is not None else ""
     if port is not None:
         netloc += ":" + str(port)
-    return urlparse.urlunsplit((scheme, netloc, path, query, fragment))
+    return urllib.parse.urlunsplit((scheme, netloc, path, query, fragment))
 
 
 def remove_hop_by_hop_header(mes):
@@ -83,61 +78,37 @@ def remove_scheme_and_authority(req):
     req.scheme = ""
 
 
+class HTTPHeader(http.client.HTTPMessage):
+
+    def getheaders(self, name):
+        return self.get_all(name)
+
+    def __setitem__(self, name, value):
+        del self[name]
+        super().__setitem__(name, value)
+
+
 def make_http_header_from_file(rfile):
-    return HTTPHeaders.parse_file(rfile)
+    return http.client.parse_headers(rfile, _class=HTTPHeader)
 
-
-class _Message(mimetools.Message):
-
-    def __init__(self, fp):
-        mimetools.Message.__init__(self, fp, 0)
-        del self.fp  # for deepcopy
-        
-
-class HTTPHeaders(_Message):
-
-    def __init__(self, headers_dict=None, _fp=None):
-
-        # for compatibility
-        # this code will be deleted when mimetools imdipend HTTPHeaders is written
-        if _fp is not None:
-            _Message.__init__(self, _fp)
-            return
-
-        
-        if headers_dict is None:
-            headers_dict = {}
-        
-        _Message.__init__(self, StringIO.StringIO(""))
-
-        for key, value in headers_dict.iteritems():
-            self["key"] = value
-
-    
-    def get_all(self, key):
-        return self.getheaders(key)
-
-    @staticmethod
-    def parse_file(fp):
-        return HTTPHeaders(headers_dict=None, _fp=fp)
 
 def get_empty_http_header():
-    return HTTPHeaders()
+    return make_http_header_from_file(io.BytesIO())
 
 # naming rule is based on rfc2616
 
 
 class HTTPMessage(object):
 
-
-    def __init__(self, start_line_str="", headers=None, body=""):
+    def __init__(self, start_line_str="", headers=None, body=b""):
         self._start_line_str = start_line_str
         if headers is None:
             headers = get_empty_http_header()
         if isinstance(headers, collections.Mapping):
             http_headers = get_empty_http_header()
-            for key, value in headers.iteritems():
+            for key, value in headers.items():
                 http_headers[key] = value
+
             headers = http_headers
             del http_headers
 
@@ -169,14 +140,16 @@ class HTTPMessage(object):
     @classmethod
     def create(cls, src, load_body=1):
         if isinstance(src, str):
-            src = StringIO.StringIO(src)
+            src = io.BytesIO(src.encode("utf-8"))
+        elif isinstance(src, bytes):
+            src = io.BytesIO(src)
         rfile = src
         while 1:
             raw_start_line = rfile.readline()
-            if raw_start_line == "\n" or raw_start_line == "\r\n":
+            if raw_start_line == b"\n" or raw_start_line == b"\r\n":
                 pass  # continue until get any string or EOF
 
-            elif raw_start_line == "":
+            elif raw_start_line == b"":
                 return None  # no http message
             else:  # not new line or EOF
                 break
@@ -195,7 +168,7 @@ class HTTPMessage(object):
     # must be override
     @classmethod
     def _parse_start_line(cls, raw_start_line):
-        return raw_start_line.rsplit("\r\n")
+        return raw_start_line.rsplit(b"\r\n")
 
     # must be override
     def get_start_line_str(self):
@@ -228,19 +201,33 @@ class HTTPMessage(object):
     def is_proxy_connection_close(self):
         return self.headers.get("Proxy-Connection", "").lower() == "close"
 
-    def __str__(self):
+    def __bytes__(self):
         s = self.get_start_line_str()
         s += "\r\n"
+
         s += str(self.headers)
-        s += "\r\n"
+        # str(self.headers) contains ending newline that separates headers and body,
+        # so we must not append "\r\n".
+
+        b = s.encode()
         if self.body is not None:
-            s += self.body
+            b += self.body
 
-        return s
+        return b
 
-    def set_body(self, body):
+    def __str__(self):
+        return bytes(self).decode("utf-8")
+
+    def set_body(self, body, text_subtype="plain"):
+        body_is_str = False
+        if isinstance(body, str):
+            body_is_str = True
+            body = body.encode("utf-8")
         self.body = body
         self.set_content_length()
+        if body_is_str:
+            self.headers["Content-Type"] = "text/{}; charset=utf-8".format(
+                text_subtype)
 
     def is_chunked(self):
         return self.headers.get("Transfer-Encoding", "").lower() == "chunked"
@@ -248,7 +235,9 @@ class HTTPMessage(object):
 
 class HTTPRequest(HTTPMessage):
 
-    def __init__(self, (method, (scheme, host, port, path, query, fragment), http_version), headers=None, body=""):
+    def __init__(self, xxx_todo_changeme, headers=None, body=b""):
+        (method, (scheme, host, port, path, query, fragment),
+         http_version) = xxx_todo_changeme
         self.method = method
         self.http_version = http_version
 
@@ -275,15 +264,7 @@ class HTTPRequest(HTTPMessage):
                 ''
             ), http_version)
 
-        uri = _parse_uri(uri)
-
-        return (method, (            uri.scheme,
-            uri.host,
-            uri.port,
-            uri.path,
-            uri.query,
-            uri.fragment
-        ), http_version)
+        return (method, parse_uri_to_6_tuple(uri), http_version)
 
     def get_request_uri(self):
         return _unparse_uri(self.scheme, self.host, self.port, self.path, self.query, self.fragment)
@@ -304,23 +285,32 @@ class HTTPRequest(HTTPMessage):
     def get_content_length(self):
         return int(self.headers.get("Content-Length", 0))
 
+
 def create_http11_request(method="GET", uri=None, headers=None, body=None):
     uri_tpl = parse_uri_to_6_tuple(uri)
 
     req = HTTPRequest((method, uri_tpl, "HTTP/1.1"), headers, body)
 
     if "Host" not in req.headers:
-        req.headers["Host"] = urlparse.urlsplit(uri).netloc
-    
+        req.headers["Host"] = urllib.parse.urlsplit(uri).netloc
+
     return req
+
+
+def _to_str(source):
+    if isinstance(source, bytes):
+        return source.decode("latin")
+    else:
+        return source
 
 
 class HTTPResponse(HTTPMessage):
 
-    def __init__(self, (http_version, status_code, reason_phrase), headers=None, body=""):
-        self.http_version = http_version
+    def __init__(self, xxx_todo_changeme1, headers=None, body=b""):
+        (http_version, status_code, reason_phrase) = xxx_todo_changeme1
+        self.http_version = _to_str(http_version)
         self.status_code = status_code
-        self.reason_phrase = reason_phrase
+        self.reason_phrase = _to_str(reason_phrase)
         super(HTTPResponse, self).__init__(None, headers, body)
         return
 
@@ -360,10 +350,12 @@ class HTTPResponse(HTTPMessage):
         """if return value < 0, you have to read data until EOF."""
         return int(self.headers.get("Content-Length", -1))
 
+
 def create_http11_response(status_code, reason_phrase, headers=None, body=None):
 
-    return HTTPResponse(("HTTP/1.1", status_code, reason_phrase),headers, body) 
-    
+    return HTTPResponse(("HTTP/1.1", status_code, reason_phrase), headers, body)
+
+
 CHUNKED = "chunked"
 
 UNKNOWN = "unknown"
@@ -395,7 +387,7 @@ def get_transfer_length(mes, hint_req=None):
 
     else:
         # maybe response
-        if mes.headers.has_key("Content-Length"):
+        if "Content-Length" in mes.headers:
             return int(mes.headers.get("Content-Length"))
         elif mes.is_connection_close():
             return -1
@@ -419,22 +411,22 @@ def get_transfer_length(mes, hint_req=None):
 
 
 def set_body(mes, body):
-    mes.body = body
-    mes.set_content_length()
+    mes.set_body(body)
 
 
 class HTTPError(HTTPResponse):
 
-    def __init__(self, (http_version, status_code,  reason_phrase), headers=None, body=""):
+    def __init__(self, xxx_todo_changeme2, headers=None, body=""):
+        (http_version, status_code,  reason_phrase) = xxx_todo_changeme2
         HTTPResponse.__init__(self, (http_version, status_code,  reason_phrase),
                               headers=headers, body=body)
 
 
-
 class HTTP11Error(HTTPError):
 
-    def __init__(self, (status_code,  reason_phrase), headers=None, body=None):
+    def __init__(self, xxx_todo_changeme3, headers=None, body=None):
         """if body=None, body will be set  '$status_code $reason_phrase' """
+        (status_code,  reason_phrase) = xxx_todo_changeme3
         if body is None:
             body = ''.join((str(status_code), ' ', reason_phrase))
 

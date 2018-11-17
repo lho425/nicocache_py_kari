@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -
-import BaseHTTPServer
-import SocketServer
+import http.server
+import socketserver
 
 from .. import core
 from ..core import iowrapper
@@ -10,15 +10,15 @@ import logging as _logging
 logger = _logging.getLogger(__name__)
 logger.debug("load %s", __name__)
 
-class MultiThreadHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
+class MultiThreadHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
 
-class ForkingHTTPServerHTTPServer(SocketServer.ForkingMixIn, BaseHTTPServer.HTTPServer):
+class ForkingHTTPServerHTTPServer(socketserver.ForkingMixIn, http.server.HTTPServer):
     pass
     
     
 def run_server(port, handler_function):
-    return _run_server(port, handler_function, HTTPServerClass=BaseHTTPServer.HTTPServer)
+    return _run_server(port, handler_function, HTTPServerClass=http.server.HTTPServer)
     
 def run_multithreading_server(port, handler_function):
     return _run_server(port, handler_function, HTTPServerClass=MultiThreadHTTPServer)
@@ -27,8 +27,8 @@ def run_forking_server(port, handler_function):
     return _run_server(port, handler_function, HTTPServerClass=ForkingHTTPServerHTTPServer)
 
 
-def _run_server(port, handler_function, HTTPServerClass=BaseHTTPServer.HTTPServer):
-    class _RequestHandler(SocketServer.StreamRequestHandler):
+def _run_server(port, handler_function, HTTPServerClass=http.server.HTTPServer):
+    class _RequestHandler(socketserver.StreamRequestHandler):
         def handle(self):
             
             client_file = iowrapper.SocketWrapper(self.connection)

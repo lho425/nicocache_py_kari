@@ -2,7 +2,7 @@
 import logging as _logging
 import gzip
 import zlib
-import StringIO
+import io
 
 from .. import core
 from ..core import httpmes
@@ -35,7 +35,7 @@ def copy_file(srcf, distf, size=-1, bufsize=8192):
 
 
 def read_file(fileobj, size=-1, bufsize=8192):
-    distf = StringIO.StringIO()
+    distf = io.BytesIO()
     copy_file(fileobj, distf, size, bufsize)
     distf.seek(0, 0)
     return distf.read()
@@ -44,7 +44,7 @@ def read_file(fileobj, size=-1, bufsize=8192):
 def extract_chunked_body_file(srcf):
     """extract chunked data from srcf and copy to distf
     only extract body (not header)"""
-    distf = StringIO.StringIO()
+    distf = io.BytesIO()
     while 1:
         size_str = srcf.readline()
         size = int(size_str, 16)  # fixme!!! can not handle chunk-extension
@@ -63,7 +63,7 @@ def extract_chunked_body_file(srcf):
 def load_chunked_body(res, body_resource):
     """body_resource is str or fileobj"""
     if isinstance(body_resource, str):
-        body_file = StringIO.StringIO(body_resource)
+        body_file = io.BytesIO(body_resource)
     else:
         body_file = body_resource
     body = extract_chunked_body_file(body_file)
@@ -96,7 +96,7 @@ def unzip_http_body(res):
     content_encoding = res.headers.get("Content-Encoding", "")
 
     if content_encoding == "gzip" or content_encoding == "x-gzip":
-        body_file = StringIO.StringIO(res.body)
+        body_file = io.BytesIO(res.body)
         with gzip.GzipFile(fileobj=body_file) as f:
             content = f.read()
         body_file.close()
@@ -119,7 +119,8 @@ def unzip_http_body(res):
 
 class EmptyResponseError(Exception):
 
-    def __init__(self, (host, port), sentdata=None):
+    def __init__(self, xxx_todo_changeme, sentdata=None):
+        (host, port) = xxx_todo_changeme
         self._hostport = (host, port)
         self._sentdata = sentdata
 
@@ -133,8 +134,10 @@ class EmptyResponseError(Exception):
                 sentdatainfo)
 
 
-def is_same_host_and_port((host1, port1), (host2, port2)):
+def is_same_host_and_port(xxx_todo_changeme1, xxx_todo_changeme2):
     """will not do name resolution because not all system do DNS cache."""
+    (host1, port1) = xxx_todo_changeme1
+    (host2, port2) = xxx_todo_changeme2
     return (host1, port1) == (host2, port2)
 
 
@@ -197,6 +200,7 @@ class ExceptionSafeHolder(Holder):
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is not None:
             safe_close(self._fileobj)
+
 
 if __name__ == "__main__":  # test
     with Holder(open("/dev/null", "w"), "devnull") as hldr:

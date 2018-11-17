@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -
 import logging as _logging
 # todo!!!py2かpy3でimportを分岐
-from urlparse import parse_qs
+from urllib.parse import parse_qs
 
 from pprint import pprint, pformat
 from .libnicovideo import videoinforewriter

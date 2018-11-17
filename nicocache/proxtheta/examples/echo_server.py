@@ -17,7 +17,7 @@ def echo(req, _, __):
     logger.debug(str(req))
 
     res = proxtheta.core.httpmes.HTTPResponse.create("HTTP/1.1 200 OK")
-    res.body = str(req)
+    res.body = bytes(req)
     res.set_content_length()
     result = proxtheta.server.ResponsePack(res)
     return result
@@ -25,6 +25,7 @@ def echo(req, _, __):
 
 def main(port):
     proxtheta.server.run_multiproc(echo, port=port)
+
 
 if __name__ == "__main__":
     import sys

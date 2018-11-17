@@ -12,7 +12,7 @@ from .server import is_request_to_this_server
 from ..core.common import ResponsePack
 from ..core import httpmes
 from ..core.utility import close_if_not_None
-import StringIO
+import io
 import traceback
 
 logger = _logging.getLogger(__name__)

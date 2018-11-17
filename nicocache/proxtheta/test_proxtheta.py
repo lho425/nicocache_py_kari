@@ -3,7 +3,7 @@ import unittest
 
 
 import os
-import StringIO
+import io
 import shutil
 from .core import httpmes
 from .utility.client import make_nonproxy_camouflaged_request

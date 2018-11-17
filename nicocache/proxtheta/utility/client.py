@@ -74,13 +74,12 @@ def make_nonproxy_camouflaged_request(req):
 
 
 #!!!適当に実装したので、乱暴に扱うと不味いことが起きると思われる。
-def get_http_resource(
-        (host, port),
-        req,
-        server_sockfile=None,
-        load_body=False,
-        nonproxy_camouflage=True,
-        ssl=None):
+def get_http_resource(xxx_todo_changeme,
+                      req,
+                      server_sockfile=None,
+                      load_body=False,
+                      nonproxy_camouflage=True,
+                      ssl=None):
     """return type: proxtheta.server.ResponsePack
 
     Send req to given (host, port) server and get response.
@@ -102,7 +101,7 @@ def get_http_resource(
     If transfer length of response is 0,
     ResponsePack.res.body will be "", ResponsePack.body_file will be None.
     """
-    # fixme!!!server_sockfileが例外安全でない！
+    (host, port) = xxx_todo_changeme
     my_func_name = func_name()
 
     if ssl is None:
@@ -150,7 +149,7 @@ def _do_get_http_response_with_sockfile(req, server_sockfile, load_body, raise_i
     """
     my_func_name = func_name()
     try:
-        server_sockfile.write(str(req))
+        server_sockfile.write(bytes(req))
         server_sockfile.flush()
     except IOError as e:
 

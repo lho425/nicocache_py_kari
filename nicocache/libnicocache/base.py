@@ -10,8 +10,8 @@ def _if_not_None_else(newvalue, basevalue):
 
 
 def _get_slash_alternative(string):
-    if isinstance(string, unicode):
-        return u"／"
+    if isinstance(string, str):
+        return "／"
 
     else:
         return "／"

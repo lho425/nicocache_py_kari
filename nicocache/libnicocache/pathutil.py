@@ -7,7 +7,7 @@ logger = _logging.getLogger(__name__)
 
 
 def _convert_unicode(string, encoding):
-    if isinstance(string, unicode):
+    if isinstance(string, str):
         return string
     else:
         return string.decode(encoding)

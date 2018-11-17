@@ -17,7 +17,7 @@ from ..server import ResponseServer
 import os
 import socket
 import errno
-import StringIO
+import io
 from gzip import GzipFile
 from io import BytesIO
 
@@ -138,7 +138,7 @@ class TestResponseFilter(unittest.TestCase):
 
         res, body_file = self._aplly_filter(accept, filtering, res)
 
-        self.assertEqual("filtered", res.body)
+        self.assertEqual(b"filtered", res.body)
 
     def test_gziped(self):
 
@@ -149,13 +149,13 @@ class TestResponseFilter(unittest.TestCase):
             res.set_body("filtered")
             return res
 
-        res = create_gzip_response("original")
+        res = create_gzip_response(b"original")
         assert res.headers["Content-Encoding"] == "gzip"
 
         res, body_file = self._aplly_filter(accept, filtering, res)
 
-        self.assertEquals(None, res.headers.get("Content-Encoding"))
-        self.assertEquals("filtered", res.body)
+        self.assertEqual(None, res.headers.get("Content-Encoding"))
+        self.assertEqual(b"filtered", res.body)
 
     def test_invalid_gziped(self):
 
@@ -166,16 +166,16 @@ class TestResponseFilter(unittest.TestCase):
             res.set_body("filtered")
             return res
 
-        res = create_gzip_response("original")
+        res = create_gzip_response(b"original")
 
         # make corrupt gzip file
-        res.set_body("0")
+        res.set_body(b"0")
 
         with self.assertRaises(IOError):
             res, body_file = self._aplly_filter(accept, filtering, res)
 
         # must not be changed on unzip error
-        self.assertEqual("0", res.body)
+        self.assertEqual(b"0", res.body)
 
     def test_not_filtering(self):
 
@@ -201,14 +201,14 @@ class TestFilteringResponseServers(unittest.TestCase):
         return ResponsePack(res)
 
     def mock_response_server_chunked(self, req, *_, **__):
-        body_file = create_chunked_body_file(["te", "s", "t"])
+        body_file = create_chunked_body_file([b"te", b"s", b"t"])
         res = create_http11_response(
             200, "OK", {"Transfer-Encoding": "chunked"})
 
         return ResponsePack(res, body_file)
 
     def mock_response_server_gzip(self, req, *_, **__):
-        res = create_gzip_response("test")
+        res = create_gzip_response(b"test")
 
         return ResponsePack(res)
 
@@ -226,8 +226,8 @@ class TestFilteringResponseServers(unittest.TestCase):
             response_filters=[ResponseFilter(filtering=self.my_res_filter)])
         r = fress(req, server_sockfile=None, info=None)
         r.close()
-        self.assertEquals("test", r.res.headers["Test"])
-        self.assertEquals("test" * 3, r.res.body)
+        self.assertEqual("test", r.res.headers["Test"])
+        self.assertEqual(b"test" * 3, r.res.body)
 
     def test(self):
 

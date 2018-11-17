@@ -18,7 +18,7 @@ def abandon_body(res, body_file):
     body_file.read(length)
 
 
-def get_partial_http_resource((host, port),
+def get_partial_http_resource(xxx_todo_changeme,
                               req,
                               first_byte_pos,
                               last_byte_pos=None,
@@ -26,6 +26,7 @@ def get_partial_http_resource((host, port),
                               load_body=False,
                               nonproxy_camouflage=True):
     """Rengeヘッダをつけてからリクエストを送る"""
+    (host, port) = xxx_todo_changeme
     if last_byte_pos is not None:
         req.headers["Range"] = (
             ''.join(("bytes=", str(first_byte_pos), "-", str(last_byte_pos))))

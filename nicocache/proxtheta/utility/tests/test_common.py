@@ -14,7 +14,7 @@ class Test_copy_file(unittest.TestCase):
 
     def test_with_size(self):
 
-        f1 = BytesIO(b"隣の客はよく柿食う客だ")
+        f1 = BytesIO("隣の客はよく柿食う客だ".encode("utf-8"))
 
         f2 = BytesIO()
 
@@ -24,7 +24,7 @@ class Test_copy_file(unittest.TestCase):
 
     def test_without_size(self):
 
-        f1 = BytesIO(b"隣の客はよく柿食う客だ")
+        f1 = BytesIO("隣の客はよく柿食う客だ".encode("utf-8"))
 
         f2 = BytesIO()
 
@@ -36,9 +36,9 @@ class Test_copy_file(unittest.TestCase):
 class Test_extract_chunked_body_file(unittest.TestCase):
 
     def test(self):
-        chunked = create_chunked_body_file([b"あいうえおあああ"] * 10)
+        chunked = create_chunked_body_file(["あいうえおあああ".encode("utf-8")] * 10)
         extracted = extract_chunked_body_file(chunked)
-        self.assertEqual(b"あいうえおあああ" * 10, extracted)
+        self.assertEqual("あいうえおあああ".encode("utf-8") * 10, extracted)
 
 
 class Test_load_chunked_body(unittest.TestCase):
@@ -48,12 +48,13 @@ class Test_load_chunked_body(unittest.TestCase):
         res = create_http11_response(200, "OK",
                                      headers={"Transfer-Encoding": "chunked"}, body=None)
 
-        body_file = create_chunked_body_file([b"あいうえおあああ"] * 10)
+        body_file = create_chunked_body_file(["あいうえおあああ".encode("utf-8")] * 10)
 
         res = load_chunked_body(res, body_file)
 
-        self.assertEqual(b"あいうえおあああ" * 10, res.body)
-        self.assertEqual(len(b"あいうえおあああ" * 10), res.get_content_length())
+        self.assertEqual("あいうえおあああ".encode("utf-8") * 10, res.body)
+        self.assertEqual(len("あいうえおあああ".encode("utf-8") * 10),
+                         res.get_content_length())
 
 
 class Test_load_body(unittest.TestCase):
@@ -63,45 +64,49 @@ class Test_load_body(unittest.TestCase):
         res = create_http11_response(200, "OK",
                                      body=None)
 
-        body_file = BytesIO(b"あいうえおあああ" * 10)
+        body_file = BytesIO("あいうえおあああ".encode("utf-8") * 10)
         res.set_content_length(len(body_file.getvalue()))
 
         res = load_body(res, body_file)
 
-        self.assertEqual(b"あいうえおあああ" * 10, res.body)
-        self.assertEqual(len(b"あいうえおあああ" * 10), res.get_content_length())
+        self.assertEqual("あいうえおあああ".encode("utf-8") * 10, res.body)
+        self.assertEqual(len("あいうえおあああ".encode("utf-8") * 10),
+                         res.get_content_length())
 
     def test_chunked(self):
 
         res = create_http11_response(200, "OK",
                                      headers={"Transfer-Encoding": "chunked"}, body=None)
 
-        body_file = create_chunked_body_file([b"あいうえおあああ"] * 10)
+        body_file = create_chunked_body_file(["あいうえおあああ".encode("utf-8")] * 10)
 
         res = load_body(res, body_file)
 
-        self.assertEqual(b"あいうえおあああ" * 10, res.body)
-        self.assertEqual(len(b"あいうえおあああ" * 10), res.get_content_length())
+        self.assertEqual("あいうえおあああ".encode("utf-8") * 10, res.body)
+        self.assertEqual(len("あいうえおあああ".encode("utf-8") * 10),
+                         res.get_content_length())
 
 
 class Test_unzip_http_body(unittest.TestCase):
 
     def test_gzip(self):
 
-        res = create_gzip_response(b"あいうえおあああ" * 10)
+        res = create_gzip_response("あいうえおあああ".encode("utf-8") * 10)
 
         res = unzip_http_body(res)
 
-        self.assertEqual(b"あいうえおあああ" * 10, res.body)
-        self.assertEqual(len(b"あいうえおあああ" * 10), res.get_content_length())
+        self.assertEqual("あいうえおあああ".encode("utf-8") * 10, res.body)
+        self.assertEqual(len("あいうえおあああ".encode("utf-8") * 10),
+                         res.get_content_length())
 
     def test_zzip(self):
-        res = create_zzip_response(b"あいうえおあああ" * 10)
+        res = create_zzip_response("あいうえおあああ".encode("utf-8") * 10)
 
         res = unzip_http_body(res)
 
-        self.assertEqual(b"あいうえおあああ" * 10, res.body)
-        self.assertEqual(len(b"あいうえおあああ" * 10), res.get_content_length())
+        self.assertEqual("あいうえおあああ".encode("utf-8") * 10, res.body)
+        self.assertEqual(len("あいうえおあああ".encode("utf-8") * 10),
+                         res.get_content_length())
 
 
 class Test_is_same_host_and_port(unittest.TestCase):

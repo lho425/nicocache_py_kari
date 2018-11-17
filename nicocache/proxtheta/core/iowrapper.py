@@ -7,7 +7,7 @@ import ssl
 # 原則close()を呼んだらラップしているfile object もcloseする
 # 別のラッパーをラップしてる場合、別のラッパーも上の挙動をするようにする
 # しかし、close()を呼んでもfile objectをclose()したくない時はFileWrapperの__init_でclose=falseを渡す
-import common
+from . import common
 
 
 class FileWrapper(object):
@@ -53,8 +53,8 @@ class FileWrapper(object):
     def __iter__(self):
         return self._file.__iter__()
 
-    def next(self):
-        return self._file.next()
+    def __next__(self):
+        return next(self._file)
 
     def close(self):
         try:
@@ -85,9 +85,9 @@ class FileWrapper(object):
             except:
                 pass
 
-    def _getclosed(self):
+    @property
+    def closed(self):
         return self._closed
-    closed = property(_getclosed, doc=socket._fileobject.closed.__doc__)
 
     def read(self, size=-1):
         self.flush()
@@ -169,7 +169,8 @@ class SocketWrapper(FileWrapper):
         return isinstance(self._wrapped_socket, ssl.SSLSocket)
 
 
-def create_sockfile((host, port), ssl=False):
+def create_sockfile(xxx_todo_changeme, ssl=False):
+    (host, port) = xxx_todo_changeme
     address = (host, port)
     sock_file = SocketWrapper(socket.create_connection(address), address)
     if not ssl:

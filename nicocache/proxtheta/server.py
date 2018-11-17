@@ -3,13 +3,13 @@ import traceback
 from copy import deepcopy
 import logging as _logging
 
-import backends.StandardModule
+from .backends import StandardModule
 from .core import httpmes
 
 
 import proxtheta
 from proxtheta import utility
-from utility.server import transfer_resbody_to_client
+from .utility.server import transfer_resbody_to_client
 from .core import common
 
 
@@ -212,7 +212,7 @@ def handle_client(response_server, client_file, info, always_close_connection=Fa
                 logger.warning(
                     "bad req" + " `" + str(e) + "'" + " from " + str(info.client_address))
                 res = httpmes.HTTP11Error((400, "Bad Request"))
-                client_file.write(str(res))
+                client_file.write(bytes(res))
                 client_file.close()
                 break
             except IOError:
@@ -237,7 +237,7 @@ def handle_client(response_server, client_file, info, always_close_connection=Fa
             server_sockfile.close()
 
 
-def run_multiproc(response_server, port=8080, backendmodule=backends.StandardModule):
+def run_multiproc(response_server, port=8080, backendmodule=StandardModule):
     """posix only"""
 
     import os
@@ -250,7 +250,7 @@ def run_multiproc(response_server, port=8080, backendmodule=backends.StandardMod
                port=port)
 
 
-def run_multithread(response_server, port=8080, backendmodule=backends.StandardModule):
+def run_multithread(response_server, port=8080, backendmodule=StandardModule):
 
     return run(response_server=response_server,
                run_server_function=backendmodule.run_multithreading_server,

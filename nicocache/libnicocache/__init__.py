@@ -14,7 +14,7 @@
 #
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import absolute_import
+
 from proxtheta.core.iowrapper import FileWrapper
 from . import pathutil
 
@@ -24,7 +24,7 @@ from . import pathutil
 import os
 import logging as _logging
 import xml.etree.cElementTree as ElementTree
-import StringIO
+import io
 import re
 import mimetypes
 from copy import copy, deepcopy
@@ -228,7 +228,7 @@ def _parse_range_str(range_header_str):
         return None
 
     # remove white space
-    range_str = range_str.translate(None, " ")
+    range_str = range_str.replace(" ", "")
 
     range_strs = range_str.split(",")
     # 複雑なrangeリクエストはomitする
@@ -439,7 +439,7 @@ class VideoCache(object):
             first, last = bytes_range
             if first >= self._video_cache_file.get_size():
                 bytes_range = None
-                self._logger.info(u"要求された動画の範囲がキャッシュのサイズを超えています。")
+                self._logger.info("要求された動画の範囲がキャッシュのサイズを超えています。")
                 self._logger.info(
                     "omit caching %s. download video from server directly.",
                     self.info.make_cache_file_path())
@@ -955,7 +955,7 @@ class VideoCacheManager:
 
         video_cache_list = []
 
-        for video_cache_file in self._video_cache_file_table.itervalues():
+        for video_cache_file in self._video_cache_file_table.values():
 
             if video_cache_info_query.match(video_cache_file.info):
 

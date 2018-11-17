@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -
-from __future__ import absolute_import
+
 import os
 import logging as _logging
 import re
@@ -88,7 +88,7 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
 
         # !!! あまりよろしくない
         # VideoCacheInfoをunicode化したほうがよいかと
-        if isinstance(res_body, unicode):
+        if isinstance(res_body, str):
             res.body = res_body.encode("utf-8")
         else:
             res.body = res_body
@@ -104,7 +104,7 @@ class NicoCacheAPIHandler(proxtheta.utility.server.ResponseServer):
             video_num)
         logs = []
 
-        if not filter(lambda cache: cache.exists(), video_cache_pair):
+        if not [cache for cache in video_cache_pair if cache.exists()]:
             # キャッシュがまだ存在していない場合は
             # 非エコノミーの大きさ0のキャッシュを作る
             video_cache_pair[0].create()

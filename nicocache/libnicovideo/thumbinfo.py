@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -
 
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 from xml.etree import ElementTree
 import time
 
@@ -10,7 +10,7 @@ def getthumbinfo(watch_id):
     http://ext.nicovideo.jp/api/getthumbinfo api wrapper
     returns xml (str)
     """
-    return urllib2.urlopen(
+    return urllib.request.urlopen(
         "http://ext.nicovideo.jp/api/getthumbinfo/" + watch_id).read()
 
 
