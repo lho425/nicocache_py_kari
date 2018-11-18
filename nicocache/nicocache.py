@@ -516,9 +516,8 @@ class ForbiddenClientHandler(proxtheta.utility.server.ResponseServer):
 
 def load_extension_modules():
     extension_modules = []
-    importer = pkgutil.get_importer("extensions")
-    for i in importer.iter_modules():
-        modname = i[0]
+    for mod_info in pkgutil.iter_modules(["extensions"]):
+        modname = mod_info.name
 
         if (os.path.exists("extensions/" + modname + ".pyc") and
                 not os.path.exists("extensions/" + modname + ".py")):
