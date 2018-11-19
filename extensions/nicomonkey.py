@@ -130,7 +130,7 @@ class UserScriptsGetter(object):
 
         # １つずつ更新されているか確かめる
         else:
-            new_user_script_list = []
+            new_user_script_iter = []
 
             def reload_if_modified(user_script):
                 user_script_path = user_script.user_script_path
@@ -141,12 +141,12 @@ class UserScriptsGetter(object):
                 else:
                     return user_script
 
-            new_user_script_list = map(reload_if_modified,
+            new_user_script_iter = map(reload_if_modified,
                                        self._user_script_list)
-            new_user_script_list = filter(lambda us: us is not None,
-                                          new_user_script_list)
+            new_user_script_iter = filter(lambda us: us is not None,
+                                          new_user_script_iter)
 
-            self._user_script_list = new_user_script_list
+            self._user_script_list = list(new_user_script_iter)
 
         return self._user_script_list
 
