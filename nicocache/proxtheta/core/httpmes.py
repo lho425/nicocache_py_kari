@@ -2,7 +2,7 @@
 import io
 import http.client
 import urllib.parse
-import collections
+import collections.abc
 import copy
 
 
@@ -104,7 +104,7 @@ class HTTPMessage(object):
         self._start_line_str = start_line_str
         if headers is None:
             headers = get_empty_http_header()
-        if isinstance(headers, collections.Mapping):
+        if isinstance(headers, collections.abc.Mapping):
             http_headers = get_empty_http_header()
             for key, value in headers.items():
                 http_headers[key] = value
