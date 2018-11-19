@@ -119,7 +119,7 @@ class SocketWrapper(FileWrapper):
         self._wrapped_socket = sock
 
         FileWrapper.__init__(
-            self, sock.makefile(mode="rw"))
+            self, sock.makefile(mode="rwb"))
         self.logger.debug("SocketWrapper created, %s, %s",
                           self.address, object.__repr__(self))
 
@@ -145,7 +145,7 @@ class SocketWrapper(FileWrapper):
             FileWrapper.close(self)
         except Exception as e:
             self.logger.error("FileWrapper.close(self) raised error: %s" % e)
-            # FileWrapper.close(self) == sock.makefile(mode="rw")).close() does not close wrapped socket.
+            # FileWrapper.close(self) == sock.makefile(mode="rwb").close() does not close wrapped socket.
             # See document of sock.makefile()
             # , so we have to close self._wrapped_socket.
         self._wrapped_socket.close()

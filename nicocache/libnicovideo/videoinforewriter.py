@@ -5,7 +5,9 @@
 import logging as _logging
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape, unescape
-import urllib.request, urllib.parse, urllib.error
+import urllib.request
+import urllib.parse
+import urllib.error
 import re
 import json
 import urllib.parse
@@ -38,11 +40,10 @@ class RewriterAbstructBase(ResponseFilter):
         return self._is_videoinfo_request(req)
 
     def rewrite(self, res, req):
+        body = res.get_body_text()
+        hooked_content = self._rewrite(body, req, res)
 
-        hooked_content = self._rewrite(res.body, req, res)
-
-        res.body = hooked_content
-        res.set_content_length()
+        res.set_body_text(hooked_content)
         return res
 
     def _is_videoinfo_request(self, req):
@@ -50,8 +51,8 @@ class RewriterAbstructBase(ResponseFilter):
         pass
 
     def _rewrite(self, content, req, res):
-        """実装しろ(書き換えたcontentをbytes型で返せ、_rewrite_mainを呼べ)"""
-        pass
+        """実装しろ(書き換えたcontentをstr型で返せ、_rewrite_mainを呼べ)"""
+        return ""
 
     def _rewrite_main(self, *args):
         """実装しろ(なんか書き換えるべきデータが渡されるから書き換えてreturnしろ)"""

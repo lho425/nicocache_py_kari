@@ -27,7 +27,7 @@ def handle_error(error, tracebackinfo, req, client_file, info):
         httperror = httpmes.HTTP11Error((500, "Internal Server Error"))
         httperror.set_body(str(error) + "\n" + str(tracebackinfo))
 
-    client_file.write(str(httperror))
+    client_file.write(bytes(httperror))
     return httperror
 
 
@@ -127,7 +127,7 @@ response header is:
             del res_for_client.headers["Connection"]
 
         try:
-            client_file.write(str(res_for_client))
+            client_file.write(bytes(res_for_client))
             logger.debug(str(info.client_address) + ": " + "transfer response")
 
             if results.body_file is not None:

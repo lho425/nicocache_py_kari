@@ -14,10 +14,10 @@ class ParseError(Exception):
 
 
 def _parse_request_line(s):
-    s = s.rstrip(b"\r\n")
+    s = s.rstrip("\r\n")
     words = s.split(None, 3)
     if len(words) == 2:
-        words.append(b"")
+        words.append("")
 
     if len(words) != 3:
         raise ParseError(s)
@@ -25,10 +25,10 @@ def _parse_request_line(s):
 
 
 def _parse_status_line(s):
-    s = s.rstrip(b"\r\n")
+    s = s.rstrip("\r\n")
     words = s.split(None, 2)
     if len(words) == 2:
-        words.append(b"")
+        words.append("")
 
     if len(words) != 3:
         raise ParseError(s)
@@ -146,6 +146,7 @@ class HTTPMessage(object):
         rfile = src
         while 1:
             raw_start_line = rfile.readline()
+            assert isinstance(raw_start_line, bytes)
             if raw_start_line == b"\n" or raw_start_line == b"\r\n":
                 pass  # continue until get any string or EOF
 
@@ -153,8 +154,8 @@ class HTTPMessage(object):
                 return None  # no http message
             else:  # not new line or EOF
                 break
-
-        start_line_elements = cls._parse_start_line(raw_start_line)
+        raw_start_line_str = raw_start_line.decode("latin")
+        start_line_elements = cls._parse_start_line(raw_start_line_str)
 
         headers = make_http_header_from_file(rfile)
 
@@ -168,7 +169,7 @@ class HTTPMessage(object):
     # must be override
     @classmethod
     def _parse_start_line(cls, raw_start_line):
-        return raw_start_line.rsplit(b"\r\n")
+        return raw_start_line.rsplit("\r\n")
 
     # must be override
     def get_start_line_str(self):
@@ -218,16 +219,28 @@ class HTTPMessage(object):
     def __str__(self):
         return bytes(self).decode("utf-8")
 
-    def set_body(self, body, text_subtype="plain"):
+    def set_body(self, body, default_text_subtype="plain"):
         body_is_str = False
         if isinstance(body, str):
             body_is_str = True
             body = body.encode("utf-8")
         self.body = body
         self.set_content_length()
-        if body_is_str:
+        if body_is_str and (self.headers.get("Content-Type") is None):
             self.headers["Content-Type"] = "text/{}; charset=utf-8".format(
-                text_subtype)
+                default_text_subtype)
+
+    def get_body_text(self):
+        encoding = self.headers.get_content_charset()
+        return self.body.decode(encoding)
+
+    def set_body_text(self, body, default_text_subtype="plain"):
+        encoding = self.headers.get_content_charset("utf-8")
+        self.body = body.encode(encoding)
+        self.set_content_length()
+        if self.headers.get("Content-Type") is None:
+            self.headers["Content-Type"] = "text/{}; charset={}".format(
+                default_text_subtype, encoding)
 
     def is_chunked(self):
         return self.headers.get("Transfer-Encoding", "").lower() == "chunked"
@@ -271,6 +284,8 @@ class HTTPRequest(HTTPMessage):
 
     def get_start_line_str(self):
         """not contain end CRLF"""
+        assert isinstance(self.get_request_uri(), str)
+        assert isinstance(self.method, str)
         return self.method + " " + self.get_request_uri() + " " + self.http_version
 
     def get_request_line_str(self):

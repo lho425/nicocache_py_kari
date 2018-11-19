@@ -281,7 +281,8 @@ class NicoMonkeyResFilter(proxy.ResponseFilter):
                 return True
 
     def filtering(self, res, req, info):
-        m = self.matcher.match(res.body)
+        body = res.get_body_text()
+        m = self.matcher.match(body)
         if not m:
             return res
 
@@ -310,8 +311,8 @@ class NicoMonkeyResFilter(proxy.ResponseFilter):
         bodys.append(self.additionnal_text_end)
         bodys.append(original_body_tail)
 
-        res.body = ''.join(bodys)
-        res.set_content_length()
+        body = ''.join(bodys)
+        res.set_body_text(body)
         return res
 
 
@@ -322,6 +323,7 @@ def get_extension():
         UserScriptsGetter("nicomonkey"))
 
     return extension
+
 
 if __name__ == "__main__":
     _logging.basicConfig()
