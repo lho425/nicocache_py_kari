@@ -78,7 +78,7 @@ def remove_scheme_and_authority(req):
     req.scheme = ""
 
 
-class HTTPHeader(http.client.HTTPMessage):
+class HTTPHeaders(http.client.HTTPMessage):
 
     def getheaders(self, name):
         return self.get_all(name)
@@ -89,7 +89,7 @@ class HTTPHeader(http.client.HTTPMessage):
 
 
 def make_http_header_from_file(rfile):
-    return http.client.parse_headers(rfile, _class=HTTPHeader)
+    return http.client.parse_headers(rfile, _class=HTTPHeaders)
 
 
 def get_empty_http_header():
