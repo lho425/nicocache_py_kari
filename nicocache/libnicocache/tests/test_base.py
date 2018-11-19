@@ -277,8 +277,8 @@ class TestCachingReader(NicoCacheTestCase):
         self.assertEqual(data, self.complete_data)
         caching_reader.close()
 
-        cachefile = open(self.get_real_path("cachefile.txt"), "r+b")
-        self.assertEqual(self.complete_data, cachefile.read())
+        with open(self.get_real_path("cachefile.txt"), "r+b") as cachefile:
+            self.assertEqual(self.complete_data, cachefile.read())
 
     def test_read_from_only_cachefile(self):
 
