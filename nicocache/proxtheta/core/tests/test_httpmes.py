@@ -4,6 +4,16 @@ import unittest
 from .. import httpmes
 
 
+class TestHTTPHeaders(unittest.TestCase):
+    @unittest.expectedFailure
+    def test_add_header(self):
+        headers = httpmes.get_empty_http_header()
+        headers.add_header("test", "1")
+        headers.add_header("test", "2")
+
+        self.assertEqual(["1", "2"], headers.get_all("test"))
+
+
 class TestHTTPRequest(unittest.TestCase):
 
     def test(self):
