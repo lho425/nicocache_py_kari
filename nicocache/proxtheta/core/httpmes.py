@@ -241,7 +241,7 @@ class HTTPMessage(object):
                 default_text_subtype)
 
     def get_body_text(self):
-        encoding = self.headers.get_content_charset()
+        encoding = self.headers.get_content_charset("latin")
         return self.body.decode(encoding)
 
     def set_body_text(self, body, default_text_subtype="plain"):
