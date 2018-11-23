@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -
 import io
 import http.client
+import email.message
 import urllib.parse
 import collections.abc
 import copy
@@ -78,7 +79,13 @@ def remove_scheme_and_authority(req):
     req.scheme = ""
 
 
+_policy = email.message.compat32.clone(linesep="\r\n")
+
+
 class HTTPHeaders(http.client.HTTPMessage):
+
+    def __init__(self):
+        super().__init__(policy=_policy)
 
     def getheaders(self, name):
         return self.get_all(name)
