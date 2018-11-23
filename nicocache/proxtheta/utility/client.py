@@ -131,7 +131,7 @@ def get_http_resource(xxx_todo_changeme,
             server_sockfile = None
     else:
         if httpmes.get_transfer_length(res, req) == 0:
-            res.body = ""
+            res.body = b""
             body_file = None
         else:
             if not res.is_connection_close():
