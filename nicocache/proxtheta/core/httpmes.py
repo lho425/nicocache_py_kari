@@ -113,7 +113,7 @@ class HTTPMessage(object):
             del http_headers
 
         self.headers = headers
-        self.body = body
+        self._body = body
 
         # do not set content length because body can be None
         # jp!!! データ抽象クラスの__init__で余計なおせっかいをしない
@@ -122,6 +122,16 @@ class HTTPMessage(object):
         # ていうかおせっかいするためのデータ抽象だろうが
         # discuss!!!どこまでおせっかいするか？
         return
+
+    @property
+    def body(self):
+        return self._body
+
+    @body.setter
+    def body(self, body):
+        if not isinstance(body, (bytes, type(None))):
+            raise ValueError("body must be bytes or None, not %s" % type(body))
+        self._body = body
 
     def copy_without_body(self):
         copy = copy.deepcopy(self)
